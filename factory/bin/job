@@ -31,17 +31,15 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+import factory_config
+
 REPO = Path(__file__).resolve().parents[2]
 FACTORY = REPO / "factory"
 JOBS = FACTORY / "jobs"
 BIN = FACTORY / "bin"
-CONFIG = json.loads((FACTORY / "config.json").read_text())
+CONFIG = factory_config.load("job")
 LABELS = CONFIG["labels"]
-# The branch jobs are built from and merged into. No fallback: a factory
-# without it must not guess and land work on the wrong branch.
-if not isinstance(CONFIG.get("base_branch"), str) or not CONFIG["base_branch"].strip():
-    sys.exit('job: factory/config.json needs "base_branch": the branch jobs build on and merge into')
-BASE = CONFIG["base_branch"]
+BASE = CONFIG["base_branch"]  # the branch jobs are built from and merged into
 MARKER = "<!-- factory -->"
 
 TRANSITIONS = {
@@ -126,11 +124,20 @@ def load(job_id):
 
 def migrate(job):
     """Fill in fields that jobs created by older versions of this script lack."""
-    if "repo" not in job:
-        job["repo"] = origin_repo()
-    for key in ("intake_base", "base_branch", "base_sha"):
+    if "repo" in job:  # the name this field had before github_repo
+        job.setdefault("github_repo", job.pop("repo"))
+    for key in ("github_repo", "intake_base", "base_branch", "base_sha"):
         job.setdefault(key, None)
     return job
+
+
+def github_repo(job):
+    """owner/name the job's PR must be in. Older jobs lack it; it is looked up
+    here, when a check needs it, not when the job is loaded, so reading a job
+    never needs git config or the network."""
+    if not job["github_repo"]:
+        job["github_repo"] = origin_repo()
+    return job["github_repo"]
 
 
 def origin_repo():
@@ -174,8 +181,8 @@ def pr_target_problem(job, number, url, base_ref):
     if base_ref != BASE:
         problems.append(f"PR #{number} targets `{base_ref}`, not the factory's base branch `{BASE}`.")
     m = re.match(r"^https://github\.com/([^/]+/[^/]+)/pull/", url)
-    if not (m and same_repo(job["repo"], m.group(1))):
-        problems.append(f"PR #{number} ({url}) isn't in {job['repo']}, the origin repo.")
+    if not (m and same_repo(github_repo(job), m.group(1))):
+        problems.append(f"PR #{number} ({url}) isn't in {github_repo(job)}, the origin repo.")
     return " ".join(problems) or None
 
 
@@ -474,6 +481,12 @@ def next_round(job):
 
 
 def advance(job, stage):
+    """Move job to stage, or raise Refused.
+
+    One move can end somewhere else: build → gate ends in needs-human when the
+    builder's PR targets the wrong base or repo, so no gate or reviewer runs on
+    it. The returned job's stage is where it ended; callers read that.
+    """
     old = job["stage"]
     require(stage in TRANSITIONS.get(old, set()) or (stage == "merged" and old not in TERMINAL),
             f"{job['id']}: {old} → {stage} is not a legal transition")
@@ -663,7 +676,7 @@ def cmd_create(number):
         "branch": f"factory/{job_id}",
         "worktree": str(REPO / ".worktrees" / job_id),
         "stage": "intake", "round": 0, "round_limit": CONFIG["max_rounds"],
-        "repo": origin_repo(), "intake_base": None, "base_branch": None, "base_sha": None,
+        "github_repo": origin_repo(), "intake_base": None, "base_branch": None, "base_sha": None,
         "intake": None, "agents": None, "gate": None, "reviews": {},
         "cost_usd": 0.0, "started": now(), "ended": None,
     }
