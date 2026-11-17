@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "aifactory": {
+      "type": "stdio",
+      "command": "./bin/aifactory",
+      "args": ["mcp"]
+    }
+  }
+}

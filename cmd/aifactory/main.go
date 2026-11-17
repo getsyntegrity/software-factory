@@ -5,30 +5,40 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+
+	"github.com/getsyntegrity/software-factory/internal/mcp"
+	"github.com/getsyntegrity/software-factory/internal/store"
 )
 
 // version is set at build time.
 var version = "dev"
 
-// command is a subcommand and its one-line description.
+const notImplemented = "This command is not implemented yet.\n"
+
+// command is a subcommand, its one-line description, the details its help
+// ends with, and what it runs without arguments (nil prints the help).
 type command struct {
-	name, summary string
+	name, summary, details string
+	run                    func(stdin io.Reader, stdout, stderr io.Writer) int
 }
 
 // commands lists the subcommands in the order the help shows them.
 var commands = []command{
-	{"mcp", "Serve the factory tools over MCP"},
-	{"serve", "Serve the factory dashboard over HTTP"},
-	{"status", "Show the state of the factory jobs"},
-	{"import-v2", "Import jobs from a Software Factory v2 checkout"},
+	{"mcp", "Serve the factory tools over MCP",
+		"Speaks MCP over stdin and stdout. Tools: create_job, get_job, list_jobs.\n" +
+			"Jobs are stored in .aifactory/jobs under the current directory.\n", runMCP},
+	{"serve", "Serve the factory dashboard over HTTP", notImplemented, nil},
+	{"status", "Show the state of the factory jobs", notImplemented, nil},
+	{"import-v2", "Import jobs from a Software Factory v2 checkout", notImplemented, nil},
 }
 
 func main() {
-	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }
 
 // run dispatches args (without the program name) and returns the exit code.
-func run(args []string, stdout, stderr io.Writer) int {
+func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if len(args) == 0 || isHelp(args[0]) || args[0] == "help" {
 		fmt.Fprint(stdout, generalHelp())
 		return 0
@@ -38,6 +48,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 			continue
 		}
 		rest := args[1:]
+		if len(rest) == 0 && c.run != nil {
+			return c.run(stdin, stdout, stderr)
+		}
 		if len(rest) == 0 || (len(rest) == 1 && isHelp(rest[0])) {
 			fmt.Fprint(stdout, commandHelp(c))
 			return 0
@@ -68,5 +81,19 @@ func generalHelp() string {
 func commandHelp(c command) string {
 	return "Usage: aifactory " + c.name + " [-h|--help]\n\n" +
 		c.summary + ".\n\n" +
-		"This command is not implemented yet.\n"
+		c.details
+}
+
+// runMCP serves MCP on stdin and stdout with the store in .aifactory/jobs.
+func runMCP(stdin io.Reader, stdout, stderr io.Writer) int {
+	s, err := store.Open(filepath.Join(".aifactory", "jobs"))
+	if err != nil {
+		fmt.Fprintf(stderr, "aifactory mcp: %v\n", err)
+		return 1
+	}
+	if err := mcp.Serve(stdin, stdout, s, version); err != nil {
+		fmt.Fprintf(stderr, "aifactory mcp: %v\n", err)
+		return 1
+	}
+	return 0
 }

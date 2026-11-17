@@ -19,7 +19,7 @@ The complete former implementation remains recoverable at:
 ./bin/aifactory <command> --help
 ```
 
-Commands: `mcp`, `serve`, `status` and `import-v2`. Every subcommand is a placeholder for now: it prints its help and does nothing else.
+Commands: `mcp`, `serve`, `status` and `import-v2`. `mcp` serves the tools `create_job`, `get_job` and `list_jobs` over MCP on stdio, with jobs stored in `.aifactory/jobs/`; see [docs/aif-004-conversacion-de-prueba.md](docs/aif-004-conversacion-de-prueba.md). The other subcommands are still placeholders: they print their help and do nothing else.
 
 Attribution of the v2 origin: [NOTICE.md](NOTICE.md).
 
