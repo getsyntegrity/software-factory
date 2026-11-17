@@ -1,2 +1,3 @@
-// Package jobs will hold the factory job records and their stage transitions.
+// Package jobs defines the factory job record: its JSON fields, the
+// deterministic job ID derived from a request ID, and its validation.
 package jobs
