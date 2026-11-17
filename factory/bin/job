@@ -17,6 +17,14 @@ Usage:
   job agents <job> <json>        record the routed agent set (called by factory/bin/route)
   job sync <job>                 refresh reviews, gate and cost from the job's files
   job summary [<job>...]         table of jobs: issue, stage, PR, cost, time
+  job pr-body <job>              the issue lines a job's PR body starts with:
+                                 `Closes #<issue>`, plus `Refs #<parent>` for a
+                                 sub-issue, or `Closes #<parent>` on its last open one;
+                                 only `Refs` lines when intake rescoped the job
+
+A sub-issue's issue.md also quotes its parent and lists its sibling
+sub-issues. Merging a sub-issue's PR closes the sub-issue, and the parent once
+every sibling is closed, unless intake rescoped the job.
 
 <job> is a job id (004-dark-mode) or an issue number (12).
 """
@@ -273,6 +281,86 @@ def fetch_issue(number):
                    "number,title,body,author,labels,state,url,comments")
 
 
+def parent_issue(repo, number):
+    """The GitHub parent of a sub-issue, as {number, state}, or None."""
+    res = run(["gh", "api", f"repos/{repo}/issues/{number}/parent"], check=False)
+    if res.returncode != 0:
+        if "404" in res.stderr or "No parent issue" in res.stderr + res.stdout:
+            return None
+        raise Refused(f"couldn't read the parent of #{number}: {(res.stderr or res.stdout).strip()}")
+    parent = json.loads(res.stdout)
+    return {"number": parent["number"], "state": parent["state"]}
+
+
+def sub_issues(repo, number):
+    """The parent's sub-issues, as [{number, title, state}]."""
+    subs = gh_json("api", "--paginate", f"repos/{repo}/issues/{number}/sub_issues")
+    return [{"number": s["number"], "title": s["title"], "state": s["state"]} for s in subs]
+
+
+def parent_refs(job):
+    """The PR body lines that tie a job's PR to its issues. A job intake rescoped
+    delivers only part of its issue, so it only refers to it and to the parent.
+    Otherwise `Closes #<issue>`, and for a sub-issue `Refs #<parent>` while other
+    sub-issues stay open, `Closes #<parent>` on the last one."""
+    partial = rescoped(job)
+    lines = [f"{'Refs' if partial else 'Closes'} #{job['issue']}"]
+    repo = github_repo(job)
+    parent = parent_issue(repo, job["issue"])
+    if parent:
+        others = [s for s in sub_issues(repo, parent["number"])
+                  if s["number"] != job["issue"] and s["state"] == "open"]
+        lines.append(f"{'Refs' if partial or others else 'Closes'} #{parent['number']}")
+    return lines
+
+
+def rescoped(job):
+    return bool((job.get("intake") or {}).get("rescoped"))
+
+
+def parent_section(job, trusted):
+    """issue.md lines quoting a sub-issue's parent and the state of its siblings."""
+    repo = github_repo(job)
+    parent = parent_issue(repo, job["issue"])
+    if not parent:
+        return []
+    p = fetch_issue(parent["number"])
+    lines = [
+        "", f"## Parent issue #{p['number']}: {p['title']}", "",
+        f"This issue is a sub-issue of #{p['number']}: one slice of it. Build only this",
+        "slice; the sub-issues below list what the other slices cover and which are done.",
+        "", "### Sub-issues", "",
+    ]
+    for s in sub_issues(repo, p["number"]):
+        mark = "this issue" if s["number"] == job["issue"] else s["state"]
+        lines.append(f"- #{s['number']} ({mark}): {s['title']}")
+    lines += ["", "### Parent body", "", quote(p["body"] or "")]
+    comments = [c for c in p["comments"] if c["author"]["login"] in trusted | {p["author"]["login"]}]
+    for c in comments:
+        who = "factory" if c["body"].startswith(MARKER) else f"@{c['author']['login']}"
+        lines += ["", f"### Parent comment by {who}, {c['createdAt']}", "",
+                  quote(c["body"].removeprefix(MARKER))]
+    return lines
+
+
+def close_finished_parent(job):
+    """After a sub-issue's PR merges: close the sub-issue and, once every sibling
+    is closed, the parent. PRs into a non-default base branch don't close issues.
+    A rescoped job delivered only part of its issue, so nothing closes."""
+    if rescoped(job):
+        return
+    repo = github_repo(job)
+    parent = parent_issue(repo, job["issue"])
+    if not parent:
+        return
+    gh("issue", "close", str(job["issue"]), "--reason", "completed",
+       "--comment", f"{MARKER}\nDelivered by PR #{job['pr']}.")
+    if parent["state"] == "open" and all(s["state"] == "closed"
+                                         for s in sub_issues(repo, parent["number"])):
+        gh("issue", "close", str(parent["number"]), "--reason", "completed",
+           "--comment", f"{MARKER}\nEvery sub-issue is delivered; the last was #{job['issue']} (PR #{job['pr']}).")
+
+
 def write_issue_md(job):
     issue = fetch_issue(job["issue"])
     author = issue["author"]["login"]
@@ -297,6 +385,7 @@ def write_issue_md(job):
             who = "factory" if c["body"].startswith(MARKER) else f"@{c['author']['login']}"
             body = c["body"].removeprefix(MARKER)
             lines += ["", f"### {who}, {c['createdAt']}", "", quote(body)]
+    lines += parent_section(job, trusted)
     (job_dir(job["id"]) / "issue.md").write_text("\n".join(lines) + "\n")
     return issue
 
@@ -777,6 +866,10 @@ def cmd_merge(job):
     run(["git", "push", "origin", "--delete", job["branch"]], check=False)
     save(advance(sync(job), "merged"))
     print(f"{job['id']}: merged PR #{job['pr']}")
+    try:
+        close_finished_parent(job)
+    except Refused as e:
+        print(f"{job['id']}: merged, but closing the sub-issue or its parent failed: {e}")
 
 
 def cmd_intake_tree(job):
@@ -871,6 +964,8 @@ def main(argv):
             print(f"{job['id']}: {job['stage']} round {job['round']} gate {job['gate'] or '-'} {reviews}".rstrip())
         elif cmd == "summary":
             cmd_summary(args)
+        elif cmd == "pr-body" and len(args) == 1:
+            print("\n".join(parent_refs(resolve(args[0]))))
         else:
             die(f"bad arguments: {' '.join(argv)}\n\n{__doc__.strip()}")
     except Refused as e:
