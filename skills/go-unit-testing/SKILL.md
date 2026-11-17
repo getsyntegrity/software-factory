@@ -16,7 +16,6 @@ description: Rules for writing or changing Go tests in this repo.
 
 These test files still use plain `testing` with `t.Errorf` / `t.Fatal`, and some of them touch the real filesystem or run subprocesses. Do not copy their style; they will be migrated to the rule above:
 
-- `cmd/aifactory/main_test.go`
 - `internal/mcp/server_test.go`
 - `internal/store/store_test.go`
 - `internal/store/artifacts_test.go`
