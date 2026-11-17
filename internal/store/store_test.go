@@ -1,13 +1,18 @@
 package store
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/getsyntegrity/software-factory/internal/jobs"
 )
@@ -247,4 +252,294 @@ func TestConcurrentCreate(t *testing.T) {
 	if files := jsonFiles(t, root); len(files) != 1 {
 		t.Errorf("json files = %v, want exactly one", files)
 	}
+}
+
+// helperEnv selects what TestHelperProcess does when the test binary is
+// re-executed as a child process.
+const helperEnv = "STORE_HELPER"
+
+// TestHelperProcess is not a real test: it runs the store operation named by
+// STORE_HELPER in a child process started by helper.
+func TestHelperProcess(t *testing.T) {
+	mode := os.Getenv(helperEnv)
+	if mode == "" {
+		return
+	}
+	s, err := Open(os.Getenv("STORE_ROOT"))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	arg := os.Getenv("STORE_ARG")
+	switch mode {
+	case "update":
+		for range 25 {
+			if _, err := s.Update(arg, increment); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
+		}
+	case "create":
+		job, err := s.Create(arg)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		fmt.Println(job.ID)
+	case "lock":
+		if _, err := lockJob(s.root, arg); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		fmt.Println("locked")
+		time.Sleep(time.Minute)
+	}
+	os.Exit(0)
+}
+
+// helper returns a child process of the test binary running mode with arg
+// against root.
+func helper(root, mode, arg string) *exec.Cmd {
+	cmd := exec.Command(os.Args[0], "-test.run=^TestHelperProcess$")
+	cmd.Env = append(os.Environ(), helperEnv+"="+mode, "STORE_ROOT="+root, "STORE_ARG="+arg)
+	cmd.Stderr = os.Stderr
+	return cmd
+}
+
+// increment treats State as a counter and advances it by one, sleeping in
+// between so that unserialized writers would lose updates.
+func increment(job jobs.Job) (jobs.Job, error) {
+	n, err := strconv.Atoi(job.State)
+	if err != nil {
+		return job, err
+	}
+	time.Sleep(time.Millisecond)
+	job.State = strconv.Itoa(n + 1)
+	return job, nil
+}
+
+func setState(state string) func(jobs.Job) (jobs.Job, error) {
+	return func(job jobs.Job) (jobs.Job, error) {
+		job.State = state
+		return job, nil
+	}
+}
+
+func TestUpdateSerializesAcrossProcesses(t *testing.T) {
+	root := t.TempDir()
+	s := open(t, root)
+	job, err := s.Create("req-u")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if _, err := s.Update(job.ID, setState("0")); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	const children = 4
+	cmds := make([]*exec.Cmd, children)
+	for i := range cmds {
+		cmds[i] = helper(root, "update", job.ID)
+		if err := cmds[i].Start(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i, cmd := range cmds {
+		if err := cmd.Wait(); err != nil {
+			t.Errorf("child %d: %v", i, err)
+		}
+	}
+	got, err := s.Get(job.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if want := strconv.Itoa(children * 25); got.State != want {
+		t.Errorf("counter = %s, want %s", got.State, want)
+	}
+}
+
+func TestCreateAcrossProcesses(t *testing.T) {
+	root := t.TempDir()
+	const children = 6
+	cmds := make([]*exec.Cmd, children)
+	outs := make([]bytes.Buffer, children)
+	for i := range cmds {
+		cmds[i] = helper(root, "create", "req-p")
+		cmds[i].Stdout = &outs[i]
+		if err := cmds[i].Start(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i, cmd := range cmds {
+		if err := cmd.Wait(); err != nil {
+			t.Errorf("child %d: %v", i, err)
+		}
+	}
+	want := jobs.IDFor("req-p")
+	for i := range outs {
+		if got := strings.TrimSpace(outs[i].String()); got != want {
+			t.Errorf("child %d: id %q, want %q", i, got, want)
+		}
+	}
+	if files := jsonFiles(t, root); len(files) != 1 {
+		t.Errorf("json files = %v, want exactly one", files)
+	}
+}
+
+func TestUpdateRejectedWritesNothing(t *testing.T) {
+	root := t.TempDir()
+	s := open(t, root)
+	job, err := s.Create("req-r")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	path := filepath.Join(root, job.ID+".json")
+	before := readFile(t, path)
+	changes := map[string]func(jobs.Job) (jobs.Job, error){
+		"change error": func(j jobs.Job) (jobs.Job, error) { return j, errors.New("boom") },
+		"empty state":  setState(""),
+		"changed id": func(j jobs.Job) (jobs.Job, error) {
+			j.ID = jobs.IDFor("other")
+			return j, nil
+		},
+		"changed request id": func(j jobs.Job) (jobs.Job, error) {
+			j.RequestID = "other"
+			return j, nil
+		},
+	}
+	for name, change := range changes {
+		if _, err := s.Update(job.ID, change); err == nil {
+			t.Errorf("%s: Update returned no error", name)
+		}
+		if after := readFile(t, path); !bytes.Equal(before, after) {
+			t.Errorf("%s: file changed to %s, want %s", name, after, before)
+		}
+	}
+	if files := jsonFiles(t, root); len(files) != 1 {
+		t.Errorf("json files = %v, want exactly one", files)
+	}
+	for _, id := range []string{jobs.IDFor("missing"), "../x"} {
+		if _, err := s.Update(id, setState("x")); !errors.Is(err, ErrNotFound) {
+			t.Errorf("Update(%q) = %v, want ErrNotFound", id, err)
+		}
+	}
+}
+
+func TestUpdateInterruptedRenameKeepsPrevious(t *testing.T) {
+	root := t.TempDir()
+	s := open(t, root)
+	job, err := s.Create("req-i")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	rename = func(string, string) error { return errors.New("crash before rename") }
+	_, err = s.Update(job.ID, setState("next"))
+	rename = os.Rename
+	if err == nil {
+		t.Fatal("Update with failing rename: no error")
+	}
+	if got, err := s.Get(job.ID); err != nil || got != job {
+		t.Errorf("Get = %+v, %v, want %+v", got, err, job)
+	}
+	if tmps, _ := filepath.Glob(filepath.Join(root, "*.tmp-*")); len(tmps) != 0 {
+		t.Errorf("leftover temp files %v", tmps)
+	}
+	if got, err := s.Update(job.ID, setState("next")); err != nil || got.State != "next" {
+		t.Errorf("Update after restore = %+v, %v", got, err)
+	}
+}
+
+func TestAbandonedTempFileIsHarmless(t *testing.T) {
+	root := t.TempDir()
+	s := open(t, root)
+	job, err := s.Create("req-t")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	crash := filepath.Join(root, "."+job.ID+".tmp-crash")
+	if err := os.WriteFile(crash, []byte(`{"id":"job-`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.Get(job.ID); err != nil || got != job {
+		t.Errorf("Get = %+v, %v, want %+v", got, err, job)
+	}
+	if list, err := s.List(); err != nil || len(list) != 1 || list[0] != job {
+		t.Errorf("List = %v, %v, want only %+v", list, err, job)
+	}
+	if _, err := s.Update(job.ID, setState("next")); err != nil {
+		t.Errorf("Update: %v", err)
+	}
+	if _, err := s.Create("req-t2"); err != nil {
+		t.Errorf("Create: %v", err)
+	}
+	if list, err := s.List(); err != nil || len(list) != 2 {
+		t.Errorf("List = %v, %v, want two jobs", list, err)
+	}
+}
+
+// within fails the test when op does not return within a few seconds.
+func within(t *testing.T, op func() error) {
+	t.Helper()
+	done := make(chan error, 1)
+	go func() { done <- op() }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("operation failed: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("operation blocked")
+	}
+}
+
+func TestKilledLockHolderDoesNotBlock(t *testing.T) {
+	root := t.TempDir()
+	s := open(t, root)
+	job, err := s.Create("req-k")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	cmd := helper(root, "lock", job.ID)
+	out, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	if line, err := bufio.NewReader(out).ReadString('\n'); err != nil || line != "locked\n" {
+		t.Fatalf("child said %q, %v", line, err)
+	}
+	if err := cmd.Process.Kill(); err != nil {
+		t.Fatal(err)
+	}
+	cmd.Wait()
+	within(t, func() error {
+		_, err := s.Update(job.ID, setState("after-kill"))
+		return err
+	})
+	if list, err := s.List(); err != nil || len(list) != 1 {
+		t.Errorf("List = %v, %v, want one job and no lock file", list, err)
+	}
+}
+
+func TestDistinctJobsDoNotBlock(t *testing.T) {
+	root := t.TempDir()
+	s := open(t, root)
+	a, err := s.Create("req-a")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	b, err := s.Create("req-b")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	unlock, err := lockJob(root, a.ID)
+	if err != nil {
+		t.Fatalf("lockJob: %v", err)
+	}
+	defer unlock()
+	within(t, func() error {
+		_, err := s.Update(b.ID, setState("free"))
+		return err
+	})
 }

@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync"
 
 	"github.com/getsyntegrity/software-factory/internal/jobs"
 )
@@ -21,11 +20,16 @@ var (
 	ErrCorrupt = errors.New("corrupt job file")
 )
 
-// Store keeps each job at <root>/<id>.json. Its methods are safe for
-// concurrent use within one process.
+// rename moves a written temp file onto its job file. Tests replace it to
+// simulate a writer that crashes before the rename.
+var rename = os.Rename
+
+// Store keeps each job at <root>/<id>.json. Each job has a single writer
+// across processes: Create and Update hold an exclusive per-job lock on
+// <root>/.<id>.lock from before they read the job until after they write it.
+// Readers take no lock; atomic writes never show them a partial job.
 type Store struct {
 	root string
-	mu   sync.Mutex
 }
 
 // Open returns a store rooted at root, creating the directory if missing.
@@ -46,8 +50,11 @@ func (s *Store) Create(requestID string) (jobs.Job, error) {
 	if err != nil {
 		return jobs.Job{}, err
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	unlock, err := lockJob(s.root, job.ID)
+	if err != nil {
+		return jobs.Job{}, err
+	}
+	defer unlock()
 	existing, err := s.read(job.ID)
 	if err == nil {
 		return existing, nil
@@ -66,16 +73,45 @@ func (s *Store) Get(id string) (jobs.Job, error) {
 	if !jobs.ValidID(id) {
 		return jobs.Job{}, fmt.Errorf("store: job %q: %w", id, ErrNotFound)
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	return s.read(id)
+}
+
+// Update replaces the job with the given id by change applied to it, holding
+// the job's lock from the read until the write. The result is rejected, and
+// nothing written, when change fails, the result is invalid, or it changes
+// the job's ID or RequestID.
+func (s *Store) Update(id string, change func(jobs.Job) (jobs.Job, error)) (jobs.Job, error) {
+	if !jobs.ValidID(id) {
+		return jobs.Job{}, fmt.Errorf("store: job %q: %w", id, ErrNotFound)
+	}
+	unlock, err := lockJob(s.root, id)
+	if err != nil {
+		return jobs.Job{}, err
+	}
+	defer unlock()
+	current, err := s.read(id)
+	if err != nil {
+		return jobs.Job{}, err
+	}
+	next, err := change(current)
+	if err != nil {
+		return jobs.Job{}, fmt.Errorf("store: update job %q: %w", id, err)
+	}
+	if err := jobs.Validate(next); err != nil {
+		return jobs.Job{}, fmt.Errorf("store: update job %q: %w", id, err)
+	}
+	if next.ID != current.ID || next.RequestID != current.RequestID {
+		return jobs.Job{}, fmt.Errorf("store: update job %q: id and request_id cannot change", id)
+	}
+	if err := s.write(next); err != nil {
+		return jobs.Job{}, err
+	}
+	return next, nil
 }
 
 // List returns every stored job sorted by id. It fails as a whole when any
 // job file is corrupt.
 func (s *Store) List() ([]jobs.Job, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	entries, err := os.ReadDir(s.root)
 	if err != nil {
 		return nil, fmt.Errorf("store: %w", err)
@@ -148,7 +184,7 @@ func (s *Store) write(job jobs.Job) (err error) {
 	if err = tmp.Close(); err != nil {
 		return fmt.Errorf("store: %w", err)
 	}
-	if err = os.Rename(tmp.Name(), s.path(job.ID)); err != nil {
+	if err = rename(tmp.Name(), s.path(job.ID)); err != nil {
 		return fmt.Errorf("store: %w", err)
 	}
 	return nil

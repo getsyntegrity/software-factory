@@ -237,6 +237,15 @@ el momento de #376, no el estado actual del código.
 - No se reemplaza main por completar este documento ni por cerrar #411/#396;
   esa entrega requiere decisión posterior del Owner.
 
+### Evidencia de implementación
+
+Cada fila registra el test real que acredita una PAR. El SHA del candidato lo
+lleva el PR que la integra.
+
+| PAR | Test real | Estado |
+|---|---|---|
+| PAR-EST-03 | `internal/store/store_test.go`: `TestUpdateSerializesAcrossProcesses`, `TestCreateAcrossProcesses`, `TestUpdateRejectedWritesNothing`, `TestUpdateInterruptedRenameKeepsPrevious`, `TestAbandonedTempFileIsHarmless`, `TestKilledLockHolderDoesNotBlock`, `TestDistinctJobsDoNotBlock` | Parcial: rebanada 1 de #381 (un escritor por job entre procesos). Pendientes: layout, sync y reconciliación. |
+
 ### Cola revisada
 
 La fuente operativa es #375; sus 27 historias tienen dependencias explícitas.
