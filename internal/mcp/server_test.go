@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -182,10 +183,10 @@ func TestCreateGetList(t *testing.T) {
 	}
 	created := okJob(t, rs[0])
 	want := jobs.Job{ID: jobs.IDFor("fase0-001"), RequestID: "fase0-001", State: "intake", NextOperation: "run_intake"}
-	if created != want {
+	if !reflect.DeepEqual(created, want) {
 		t.Errorf("created %+v, want %+v", created, want)
 	}
-	if again := okJob(t, rs[1]); again != want {
+	if again := okJob(t, rs[1]); !reflect.DeepEqual(again, want) {
 		t.Errorf("repeated create %+v, want %+v", again, want)
 	}
 	list := toolResult(t, rs[2])
@@ -199,7 +200,7 @@ func TestCreateGetList(t *testing.T) {
 
 	// A new session on the same store sees the job.
 	rs = serve(t, root, call(4, "get_job", `{"id":"`+want.ID+`"}`))
-	if got := okJob(t, rs[0]); got != want {
+	if got := okJob(t, rs[0]); !reflect.DeepEqual(got, want) {
 		t.Errorf("get %+v, want %+v", got, want)
 	}
 }

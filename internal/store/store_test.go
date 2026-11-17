@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -66,11 +67,11 @@ func TestCreateIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second Create: %v", err)
 	}
-	if first != second {
+	if !reflect.DeepEqual(first, second) {
 		t.Errorf("second Create = %+v, want %+v", second, first)
 	}
 	want, _ := jobs.New("req-1")
-	if first != want {
+	if !reflect.DeepEqual(first, want) {
 		t.Errorf("Create = %+v, want %+v", first, want)
 	}
 	list, err := s.List()
@@ -96,11 +97,11 @@ func TestRestartIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get after reopen: %v", err)
 	}
-	if got != original || got.State != "intake" || got.NextOperation != "run_intake" {
+	if !reflect.DeepEqual(got, original) || got.State != "intake" || got.NextOperation != "run_intake" {
 		t.Errorf("Get after reopen = %+v, want %+v", got, original)
 	}
 	again, err := s.Create("req-1")
-	if err != nil || again != original {
+	if err != nil || !reflect.DeepEqual(again, original) {
 		t.Errorf("Create after reopen = %+v, %v, want %+v", again, err, original)
 	}
 	if list, err := s.List(); err != nil || len(list) != 1 {
@@ -437,7 +438,7 @@ func TestUpdateInterruptedRenameKeepsPrevious(t *testing.T) {
 	if err == nil {
 		t.Fatal("Update with failing rename: no error")
 	}
-	if got, err := s.Get(job.ID); err != nil || got != job {
+	if got, err := s.Get(job.ID); err != nil || !reflect.DeepEqual(got, job) {
 		t.Errorf("Get = %+v, %v, want %+v", got, err, job)
 	}
 	if tmps, _ := filepath.Glob(filepath.Join(root, "*.tmp-*")); len(tmps) != 0 {
@@ -459,10 +460,10 @@ func TestAbandonedTempFileIsHarmless(t *testing.T) {
 	if err := os.WriteFile(crash, []byte(`{"id":"job-`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := s.Get(job.ID); err != nil || got != job {
+	if got, err := s.Get(job.ID); err != nil || !reflect.DeepEqual(got, job) {
 		t.Errorf("Get = %+v, %v, want %+v", got, err, job)
 	}
-	if list, err := s.List(); err != nil || len(list) != 1 || list[0] != job {
+	if list, err := s.List(); err != nil || len(list) != 1 || !reflect.DeepEqual(list[0], job) {
 		t.Errorf("List = %v, %v, want only %+v", list, err, job)
 	}
 	if _, err := s.Update(job.ID, setState("next")); err != nil {

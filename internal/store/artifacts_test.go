@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/getsyntegrity/software-factory/internal/jobs"
@@ -131,10 +132,10 @@ func TestArtifactAbandonedTempFileIsHarmless(t *testing.T) {
 			t.Errorf("ReadArtifact(%+v) = %q, %v, want valid", a, got, err)
 		}
 	}
-	if got, err := s.Get(job.ID); err != nil || got != job {
+	if got, err := s.Get(job.ID); err != nil || !reflect.DeepEqual(got, job) {
 		t.Errorf("Get = %+v, %v, want %+v", got, err, job)
 	}
-	if list, err := s.List(); err != nil || len(list) != 1 || list[0] != job {
+	if list, err := s.List(); err != nil || len(list) != 1 || !reflect.DeepEqual(list[0], job) {
 		t.Errorf("List = %v, %v, want only %+v", list, err, job)
 	}
 }
@@ -231,10 +232,10 @@ func TestArtifactFoldersKeepJobOperations(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, a.ID, "round-1", ".review-code.md.tmp-crash"), []byte("half"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if again, err := s.Create("req-1"); err != nil || again != a {
+	if again, err := s.Create("req-1"); err != nil || !reflect.DeepEqual(again, a) {
 		t.Errorf("Create = %+v, %v, want %+v", again, err, a)
 	}
-	if got, err := s.Get(a.ID); err != nil || got != a {
+	if got, err := s.Get(a.ID); err != nil || !reflect.DeepEqual(got, a) {
 		t.Errorf("Get = %+v, %v, want %+v", got, err, a)
 	}
 	next, err := s.Update(a.ID, setState("next"))
@@ -242,7 +243,7 @@ func TestArtifactFoldersKeepJobOperations(t *testing.T) {
 		t.Fatalf("Update = %+v, %v", next, err)
 	}
 	if list, err := s.List(); err != nil || len(list) != 2 || list[0].ID > list[1].ID ||
-		(list[0] != next && list[1] != next) || (list[0] != b && list[1] != b) {
+		(!reflect.DeepEqual(list[0], next) && !reflect.DeepEqual(list[1], next)) || (!reflect.DeepEqual(list[0], b) && !reflect.DeepEqual(list[1], b)) {
 		t.Errorf("List = %v, %v, want exactly %+v and %+v", list, err, next, b)
 	}
 	if files := jsonFiles(t, root); len(files) != 2 {
