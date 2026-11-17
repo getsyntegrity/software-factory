@@ -73,10 +73,12 @@ approver: their frontmatter sets it. Each agent replies with one line;
 you are notified when it finishes, and you advance that job then. While agents
 run, don't poll and don't wait: end your turn with a one-line status.
 
-Every prompt starts with the job's header, built from `job.json`:
+Every prompt starts with the job's header, built from `job.json`, with
+`<base>` read from `base_branch` in `factory/config.json` (the one place it is
+set) and `<github repo>` from `repo` in `job.json`:
 
 ```
-Job: <id>. Job folder: <repo>/factory/jobs/<id>/. Main checkout: <repo>. Worktree: <worktree>. Branch: <branch>. Base: origin/<base>. Issue: #<issue>.
+Job: <id>. Job folder: <repo>/factory/jobs/<id>/. Main checkout: <repo>. Worktree: <worktree>. Branch: <branch>. Base: origin/<base>. Repo: <github repo>. Issue: #<issue>.
 ```
 
 `<header>` below means that line. Keep `Job folder: <path>/` exactly as shown:
@@ -95,8 +97,11 @@ Start every message to it with `<header>` too.
 Each step below runs when the previous agent or script finishes. Report one
 short line per transition, e.g. `004-dark-mode #12: gate PASS → reviewing (code, ux, ui)`.
 
-**intake.** Spawn `intake` with `<header>`. When it returns, read its
-decision:
+**intake.** Run `factory/bin/job intake-tree <id>`. It fetches the base
+branch, makes a detached worktree of it, records the commit in `job.json`, and
+prints the worktree's path. Spawn `intake` with `<header> Base tree: <path>.`
+When it returns, read its decision (`advance` removes the base tree, and
+refuses if intake didn't get one for the current base):
 
 - `ACCEPT`: run `factory/bin/route <id>`, then `factory/bin/job advance <id> spec`
   (it comments on the issue and creates the worktree). Go to **spec**.
@@ -115,6 +120,8 @@ gate's `round-<N-1>/checks.md`, the reviews in `round-<N-1>/`, or
 - `STATUS: READY`: `factory/bin/job advance <id> gate`, then go to **gate**. If
   `advance` refuses (nothing pushed, no PR, a dirty tree), resume the builder
   once with the refusal. If it refuses again, stop this job and tell the user.
+  If it prints `needs-human`, the PR targets the wrong base or repo: the job
+  stops there, before any gate or reviewer.
 - `STATUS: BLOCKED`: `factory/bin/job advance <id> needs-human`.
 
 **gate.** Run `factory/bin/gate <id>`. It prints `GATE: PASS` or `GATE: FAIL`.
