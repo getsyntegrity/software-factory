@@ -31,20 +31,31 @@ is in the main checkout; your one file goes there.
 
 ## What to look for
 
-- **Access control**: every new or changed endpoint, handler or query checks who
-  the caller is and that they own what they touch. Database or storage rules
-  that open data to the wrong readers.
-- **Input**: user input is validated, and never reaches SQL, shell commands,
-  file paths or templates unescaped.
-- **XSS**: raw HTML rendering, markdown rendering, and user-supplied strings put
-  into the DOM, URLs or meta tags.
-- **Data exposure**: responses, logs or public documents that leak ids, emails,
-  tokens or internal errors.
-- **Payments and identity**: anything that can grant access, skip a webhook
-  signature check, or change who a user is.
-- **Abuse**: public endpoints that can be spammed without a rate limit.
-- **Secrets**: keys, credentials or `.env` values in commits.
-- **Dependencies**: new packages, and whether they are needed and maintained.
+This project is `aifactory`, a Go command-line program that orchestrates coding
+agents over GitHub issues. Its untrusted input is issue, PR and comment text,
+agent output, and repository contents; its hot spots are process execution,
+the filesystem and GitHub credentials.
+
+- **Process execution**: `os/exec` gets a fixed binary and an argument list,
+  never a string passed to `sh -c` or `bash -c` that contains issue text,
+  branch names, paths or agent output. Arguments that could start with `-` are
+  separated with `--`. Child processes get a timeout or a cancellable
+  `context.Context`.
+- **Paths**: paths built from input (job ids, branch names, file names) are
+  cleaned and checked to stay under their root (`filepath.Rel`, no `..`, no
+  absolute paths, symlinks considered) before reading, writing or deleting.
+- **Access control**: any listener (HTTP, socket, MCP server) binds to
+  localhost unless the spec says otherwise, and checks who the caller is
+  before acting.
+- **Data exposure**: logs, errors, state files and PR or issue comments never
+  include tokens, `gh` auth output, environment dumps or full child-process
+  environments. State files with secrets are written `0600`.
+- **Prompt injection**: issue and comment text reaching an agent prompt is
+  quoted as data, never as instructions, and never widens what the agent may
+  run or touch.
+- **Secrets**: keys, tokens or `.env` values in commits, tests or fixtures.
+- **Dependencies**: new modules in `go.mod`, whether the standard library
+  would do, and whether they are maintained; `go.sum` changes match them.
 
 ## Write review-security.md
 

@@ -31,12 +31,12 @@ skim a job on the dashboard and read the detail only where it matters.
 ```
 intake (fable)     → ACCEPT (scope possibly changed) | NEEDS-INFO | REJECT, posted as an issue comment
 route (script)     → reviewers + models from risk/surfaces via config.json
-worktree           → factory/<job-id> from origin/main
+worktree           → factory/<job-id> from origin/<base_branch>
 spec-writer (opus) → spec.md
 builder            → commits; first round pushes + opens draft PR "Closes #<n>"
 gate (script)      → checks.sh; FAIL → builder gets the log, no reviewers spawned
 reviewers (routed) → parallel, WAIT FOR ALL; CHANGES → builder → gate → reviewers (max rounds)
-approver (opus)    → APPROVE: sync origin/main, gate, gh pr merge
+approver (opus)    → APPROVE: sync origin/<base_branch>, gate, gh pr merge
                      ESCALATE: PR ready, decision as PR comment, label factory:needs-human
 ```
 
@@ -83,7 +83,8 @@ A low-risk change with no UI runs one Haiku reviewer. Routing is visible in
 one file and changes without touching a prompt.
 
 **Scripts decide whether it works.** The gate runs `checks.sh` before any
-reviewer is spawned, and again after syncing with `main` before the merge.
+reviewer is spawned, and again after syncing with the base branch (`base_branch` in
+`config.json`) before the merge.
 A failing build goes straight back to the builder with the log. The gate runs
 the main checkout's copy of `checks.sh`, so a branch can't edit the checks it
 is judged by. It fails any branch that modifies or deletes a file under
@@ -99,7 +100,7 @@ they read the diff for correctness, scope, security, UX and visual fit.
 **A PR per issue, merged through GitHub.** v1 merged locally, which broke when
 the main checkout was dirty or busy. v2 merges with `gh pr merge`, so branch
 protection, required checks and the PR history all apply, and your main
-checkout is never touched. Before merging, the branch is synced with `main` and
+checkout is never touched. Before merging, the branch is synced with the base branch and
 gated again, because another job may have merged since it was tested.
 
 **You approve by merging.** The approver merges what it would merge itself and

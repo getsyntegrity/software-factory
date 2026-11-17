@@ -13,8 +13,9 @@ Stop and tell the user if any of these fail:
 
 - It's a git repo with an `origin` on GitHub, and `gh auth status` shows a user
   who can push to it and manage its labels.
-- Its default branch (`gh repo view --json defaultBranchRef`) exists on
-  `origin`.
+- The branch jobs will build on and merge into exists on `origin`. It is
+  usually the default branch (`gh repo view --json defaultBranchRef`), but it
+  can be any branch, such as a development branch.
 - `claude --version` is 2.1.257 or later (the intake agent runs on Fable).
 - `python3 --version` is 3.10 or later. The scripts use only the standard
   library.
@@ -67,7 +68,8 @@ It must be non-interactive, must not rewrite files (no `--fix`, no
 
 **`factory/config.json`.**
 
-- `base_branch`: the default branch.
+- `base_branch`: the branch jobs build on and merge into (often the default
+  branch). Required: the scripts stop with an error if it is missing.
 - `merge_method`: `merge`, `squash` or `rebase`, one the repo allows
   (`gh api repos/{owner}/{repo} --jq '{allow_merge_commit, allow_squash_merge, allow_rebase_merge}'`).
 - `protected_paths`: keep the two factory entries and don't add the project's
@@ -114,6 +116,11 @@ open http://localhost:8000/dashboard.html.
 Each job works in its own git worktree, a full checkout of the repo at
 `.worktrees/<job-id>` (gitignored). A tool run from the repo root that doesn't
 read `.gitignore` sees those copies too; exclude `.worktrees/` in its config.
+The worktree is created from a freshly fetched `origin/<base_branch>` (see
+`factory/config.json`). If `codegraph` is on PATH, the factory then runs
+`codegraph init -y` inside it, so every job gets its own fresh index;
+`.codegraph/` is added to `.git/info/exclude`. Indexing is best effort: if it
+fails or takes over 10 minutes, the job continues without an index.
 ```
 
 **`.gitignore`.** Append these two lines:
@@ -140,7 +147,7 @@ gh label create factory:needs-human --color D93F0B --description "The factory ne
 
 ## 3. Verify
 
-1. In the project root, on the current branch, `bash factory/checks.sh` exits 0.
+1. In a checkout of `base_branch`, `bash factory/checks.sh` exits 0.
    If it fails there, the factory can never pass a job: fix the
    script (not the project) or tell the user what's broken.
 2. `factory/bin/job queue` runs without an error.

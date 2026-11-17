@@ -9,6 +9,7 @@ orchestrator never improvises them.
 Usage:
   job queue                      what /factory run should do with each labeled issue
   job create <issue>             new job for an open `factory` issue; prints the job id
+  job intake-tree <job>          fetch the base branch, make a detached worktree of it for intake; prints its path
   job advance <job> <stage>      move a job to <stage>, or refuse
   job merge <job>                APPROVE → sync with the base branch, gate, merge the PR
   job feedback <job>             needs-human → build, with your feedback (stdin) as feedback-<k>.md
@@ -24,6 +25,7 @@ import fcntl
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -35,6 +37,10 @@ JOBS = FACTORY / "jobs"
 BIN = FACTORY / "bin"
 CONFIG = json.loads((FACTORY / "config.json").read_text())
 LABELS = CONFIG["labels"]
+# The branch jobs are built from and merged into. No fallback: a factory
+# without it must not guess and land work on the wrong branch.
+if not isinstance(CONFIG.get("base_branch"), str) or not CONFIG["base_branch"].strip():
+    sys.exit('job: factory/config.json needs "base_branch": the branch jobs build on and merge into')
 BASE = CONFIG["base_branch"]
 MARKER = "<!-- factory -->"
 
@@ -54,6 +60,8 @@ TERMINAL = {"merged", "rejected"}
 # whether the factory merged it or a person did mid-round.
 WAITING = {"needs-info", "needs-human"}
 CONCURRENCY = CONFIG["concurrency"]
+# How long a job's `codegraph init` may run before the job moves on without it.
+INDEX_TIMEOUT_S = 600
 
 
 class Refused(Exception):
@@ -113,7 +121,53 @@ def load(job_id):
     if job_id not in _locks:
         _locks[job_id] = open(job_dir(job_id) / ".lock", "w")
         fcntl.flock(_locks[job_id], fcntl.LOCK_EX)
-    return json.loads(path.read_text())
+    return migrate(json.loads(path.read_text()))
+
+
+def migrate(job):
+    """Fill in fields that jobs created by older versions of this script lack."""
+    if "repo" not in job:
+        job["repo"] = origin_repo()
+    for key in ("intake_base", "base_branch", "base_sha"):
+        job.setdefault(key, None)
+    return job
+
+
+def origin_repo():
+    """owner/name of the origin remote, the repo PRs must be opened in."""
+    # The configured URL, not `remote get-url`'s: that one applies insteadOf rewrites.
+    url = run(["git", "config", "--get", "remote.origin.url"], check=False).stdout.strip()
+    m = re.match(r"^(?:git@github\.com:|ssh://git@github\.com/|https://github\.com/)([^/]+/[^/]+?)(?:\.git)?/?$", url)
+    if not m:
+        raise Refused(f"origin ({url}) isn't a GitHub repo")
+    return m.group(1)
+
+
+def base_sha():
+    """Fetch the base branch and return the commit origin has it at."""
+    run(["git", "fetch", "origin", BASE])
+    return run(["git", "rev-parse", "--verify", f"origin/{BASE}^{{commit}}"]).stdout.strip()
+
+
+def intake_tree(job):
+    return REPO / ".worktrees" / "intake" / job["id"]
+
+
+def remove_intake_tree(job):
+    path = intake_tree(job)
+    if path.exists():
+        run(["git", "worktree", "remove", "--force", str(path)])
+
+
+def pr_target_problem(job, number, url, base_ref):
+    """Why the job's PR isn't in origin's repo against the base branch, or None."""
+    problems = []
+    if base_ref != BASE:
+        problems.append(f"PR #{number} targets `{base_ref}`, not the factory's base branch `{BASE}`.")
+    want = f"https://github.com/{job['repo']}/pull/"
+    if not url.startswith(want):
+        problems.append(f"PR #{number} ({url}) isn't in {job['repo']}, the origin repo.")
+    return " ".join(problems) or None
 
 
 def save(job):
@@ -345,6 +399,39 @@ def git(job, *args, check=True):
     return run(["git", *args], cwd=job["worktree"], check=check)
 
 
+def index_worktree(job):
+    """Build a fresh CodeGraph index inside the job's worktree.
+
+    Each worktree gets its own .codegraph/ (never copied from another
+    checkout). .codegraph/ goes in the shared info/exclude so the builder's
+    clean-worktree check doesn't see it. Skipped when codegraph isn't installed.
+
+    The index is optional: this never raises, so a failure here can't leave a
+    job half-advanced with its worktree and branch already made.
+    """
+    if not shutil.which("codegraph"):
+        return
+    try:
+        common = Path(git(job, "rev-parse", "--git-common-dir").stdout.strip())
+        if not common.is_absolute():
+            common = Path(job["worktree"]) / common
+        exclude = common / "info" / "exclude"
+        exclude.parent.mkdir(parents=True, exist_ok=True)
+        text = exclude.read_text() if exclude.exists() else ""
+        if ".codegraph/" not in text.splitlines():
+            with exclude.open("a") as f:
+                f.write(("\n" if text and not text.endswith("\n") else "") + ".codegraph/\n")
+        res = subprocess.run(["codegraph", "init", "-y"], cwd=job["worktree"],
+                             capture_output=True, text=True, timeout=INDEX_TIMEOUT_S)
+        if res.returncode:
+            raise Refused((res.stderr or res.stdout).strip() or f"exit {res.returncode}")
+    except subprocess.TimeoutExpired:
+        print(f"warning: codegraph init timed out after {INDEX_TIMEOUT_S}s in "
+              f"{job['worktree']}; the job continues without an index", file=sys.stderr)
+    except (Refused, OSError) as e:
+        print(f"warning: codegraph index skipped for {job['worktree']}: {e}", file=sys.stderr)
+
+
 def pr_state(job):
     return gh_json("pr", "view", str(job["pr"]), "--json", "state")["state"]
 
@@ -390,6 +477,10 @@ def advance(job, stage):
     elif old == "intake":
         want = {"needs-info": "NEEDS-INFO", "rejected": "REJECT", "spec": "ACCEPT"}[stage]
         require(decision == want, f"intake.md says DECISION: {decision}, not {want}")
+        ib = job["intake_base"]
+        require(ib and ib["branch"] == BASE,
+                f"intake didn't evaluate origin/{BASE}: run factory/bin/job intake-tree {job['id']} and intake again")
+        remove_intake_tree(job)
         title = f"### Factory intake: {decision}"
         if stage == "spec":
             require(job["agents"], "route the job first: factory/bin/route " + job["id"])
@@ -401,15 +492,18 @@ def advance(job, stage):
         elif stage == "rejected":
             label("issue", job["issue"], remove=LABELS["queue"])
         else:
-            run(["git", "fetch", "origin", BASE])
+            sha = base_sha()
             Path(job["worktree"]).parent.mkdir(parents=True, exist_ok=True)
-            run(["git", "worktree", "add", "-b", job["branch"], job["worktree"], f"origin/{BASE}"])
+            run(["git", "worktree", "add", "-b", job["branch"], job["worktree"], sha])
+            job["base_branch"], job["base_sha"] = BASE, sha
+            index_worktree(job)
 
     elif old == "needs-info":
         require_slot(job["id"])
         k = len(list(d.glob("intake-*.md"))) + 1
         (d / "intake.md").rename(d / f"intake-{k}.md")
         job["intake"] = None
+        job["intake_base"] = None  # the next intake evaluates the base as it is then
         write_issue_md(job)
         label("issue", job["issue"], remove=LABELS["needs_info"])
 
@@ -429,9 +523,16 @@ def advance(job, stage):
         remote = res.stdout.strip() if res.returncode == 0 else ""
         require(head == remote, f"{job['branch']} isn't pushed: local {head[:7]}, origin {remote[:7] or 'missing'}")
         if not job["pr"]:
-            prs = gh_json("pr", "list", "--head", job["branch"], "--state", "open", "--json", "number,url")
+            prs = gh_json("pr", "list", "--head", job["branch"], "--state", "open",
+                          "--json", "number,url,baseRefName")
             require(len(prs) == 1, f"expected one open PR from {job['branch']}, found {len(prs)}")
-            job["pr"], job["pr_url"] = prs[0]["number"], prs[0]["url"]
+            pr = prs[0]
+            job["pr"], job["pr_url"] = pr["number"], pr["url"]
+            why = pr_target_problem(job, pr["number"], pr["url"], pr["baseRefName"])
+            if why:
+                # No gate or reviewer runs on a PR that would merge into the wrong place.
+                escalate(job, f"The builder's PR is open against the wrong target. {why}")
+                stage = "needs-human"
 
     elif old == "build":  # → needs-human
         status = first_line(d / "build.md")
@@ -537,6 +638,7 @@ def cmd_create(number):
         "branch": f"factory/{job_id}",
         "worktree": str(REPO / ".worktrees" / job_id),
         "stage": "intake", "round": 0, "round_limit": CONFIG["max_rounds"],
+        "repo": origin_repo(), "intake_base": None, "base_branch": None, "base_sha": None,
         "intake": None, "agents": None, "gate": None, "reviews": {},
         "cost_usd": 0.0, "started": now(), "ended": None,
     }
@@ -608,6 +710,15 @@ def cmd_merge(job):
         save(advance(sync(job), "needs-human"))
         print(f"{job['id']}: needs-human: {why.splitlines()[0]}")
 
+    # First, before syncing or gating: never merge a PR into anything but the base.
+    try:
+        pr = gh_json("pr", "view", str(job["pr"]), "--json", "baseRefName,url")
+    except Refused as e:
+        return fail(f"Couldn't read PR #{job['pr']} before merging:\n\n```\n{e}\n```")
+    why = pr_target_problem(job, job["pr"], pr["url"], pr["baseRefName"])
+    if why:
+        return fail(f"Not merged. {why}")
+
     git(job, "fetch", "origin", BASE)
     merged = git(job, "merge", "--no-edit", f"origin/{BASE}", check=False)
     if merged.returncode != 0:
@@ -628,6 +739,18 @@ def cmd_merge(job):
     run(["git", "push", "origin", "--delete", job["branch"]], check=False)
     save(advance(sync(job), "merged"))
     print(f"{job['id']}: merged PR #{job['pr']}")
+
+
+def cmd_intake_tree(job):
+    require(job["stage"] == "intake", f"{job['id']} is in {job['stage']}, not intake")
+    remove_intake_tree(job)
+    sha = base_sha()
+    path = intake_tree(job)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    run(["git", "worktree", "add", "--detach", str(path), sha])
+    job["intake_base"] = {"branch": BASE, "sha": sha}
+    save(job)
+    print(path)
 
 
 def cmd_feedback(job, text):
@@ -689,6 +812,8 @@ def main(argv):
             cmd_queue()
         elif cmd == "create" and len(args) == 1 and args[0].isdigit():
             cmd_create(args[0])
+        elif cmd == "intake-tree" and len(args) == 1:
+            cmd_intake_tree(resolve(args[0]))
         elif cmd == "advance" and len(args) == 2:
             job = advance(sync(resolve(args[0])), args[1])
             save(sync(job))
