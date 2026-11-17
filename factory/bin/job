@@ -138,9 +138,14 @@ def origin_repo():
     # The configured URL, not `remote get-url`'s: that one applies insteadOf rewrites.
     url = run(["git", "config", "--get", "remote.origin.url"], check=False).stdout.strip()
     m = re.match(r"^(?:git@github\.com:|ssh://git@github\.com/|https://github\.com/)([^/]+/[^/]+?)(?:\.git)?/?$", url)
-    if not m:
-        raise Refused(f"origin ({url}) isn't a GitHub repo")
-    return m.group(1)
+    if m:
+        return m.group(1)
+    # Other shapes (an ssh host alias, a user or port in the URL, www.github.com):
+    # let gh resolve them, the same way it picks the repo for every other call.
+    try:
+        return gh("repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner").strip()
+    except Refused as e:
+        raise Refused(f"origin ({url}) isn't a GitHub repo gh can resolve: {e}")
 
 
 def base_sha():
