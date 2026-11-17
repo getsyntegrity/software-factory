@@ -159,9 +159,13 @@ def intake_tree(job):
 
 
 def remove_intake_tree(job):
+    """Remove the intake tree whatever state it was left in: registered with git
+    or not, with its directory or without it."""
     path = intake_tree(job)
+    run(["git", "worktree", "remove", "--force", str(path)], check=False)
+    run(["git", "worktree", "prune"])  # drops a registration whose directory is gone
     if path.exists():
-        run(["git", "worktree", "remove", "--force", str(path)])
+        shutil.rmtree(path)  # a directory git no longer tracks as a worktree
 
 
 def pr_target_problem(job, number, url, base_ref):
@@ -546,11 +550,14 @@ def advance(job, stage):
             require(len(prs) == 1, f"expected one open PR from {job['branch']}, found {len(prs)}")
             pr = prs[0]
             job["pr"], job["pr_url"] = pr["number"], pr["url"]
-            why = pr_target_problem(job, pr["number"], pr["url"], pr["baseRefName"])
-            if why:
-                # No gate or reviewer runs on a PR that would merge into the wrong place.
-                escalate(job, f"The builder's PR is open against the wrong target. {why}")
-                stage = "needs-human"
+        else:
+            # Every round: the PR's base can be edited after it was first checked.
+            pr = gh_json("pr", "view", str(job["pr"]), "--json", "baseRefName,url")
+        why = pr_target_problem(job, job["pr"], pr["url"], pr["baseRefName"])
+        if why:
+            # No gate or reviewer runs on a PR that would merge into the wrong place.
+            escalate(job, f"The builder's PR is open against the wrong target. {why}")
+            stage = "needs-human"
 
     elif old == "build":  # → needs-human
         status = first_line(d / "build.md")
