@@ -39,17 +39,28 @@ rewrites files, such as `--fix`.
 ## What to look for
 
 - **Correctness**: it does what the spec's requirements say. Look for edge
-  cases, missing awaits, unhandled errors, and off-by-one or wrong-path bugs.
+  cases, unchecked or discarded `error` returns, `nil` maps and pointers,
+  shadowed `err`, `defer` inside loops, goroutines or `exec.Cmd`s that are
+  never waited on or cancelled, and off-by-one or wrong-path bugs.
 - **Simplicity**: it is the smallest change that fully meets the spec, with no
-  speculative options, fallbacks, hidden defaults or swallowed errors.
-- **Reuse**: it uses existing helpers, components and patterns instead of
-  duplicating them.
+  speculative options, fallbacks, hidden defaults or swallowed errors. No
+  interfaces with a single implementation and no packages created ahead of
+  need.
+- **Reuse**: it uses existing helpers, packages and patterns instead of
+  duplicating them, and the standard library before a new module in `go.mod`.
 - **Conventions**: the repo's style as AGENTS.md and the neighbouring code show
-  it, and comment density like the neighbouring code.
+  it, and comment density like the neighbouring code. This is a Go module
+  (`go.mod`), checked by `make check`: gofmt, `go vet`, `go test`, `go build`.
+  There is no linter beyond `go vet`, so catch what one would: unused code,
+  errors wrapped without `%w` where callers need `errors.Is`/`errors.As`,
+  exported names without a doc comment, and `context.Context` not passed as
+  the first parameter where the code does I/O or runs processes.
 - **Docs**: AGENTS.md and any docs it lists are updated where the change
   requires it.
-- **Tests**: new behaviour has tests where the repo has a test runner, and no
-  existing test was weakened, skipped or special-cased to pass.
+- **Tests**: new behaviour has `_test.go` tests run by `go test ./...`
+  (table-driven where the cases vary only in data), deterministic (no sleeps,
+  real network or wall-clock dependence; temp dirs via `t.TempDir()`), and no
+  existing test was weakened, skipped (`t.Skip`) or special-cased to pass.
 - **Commits**: short one-line messages and nothing stray committed. Trailers
   and attribution (`Co-Authored-By` and the like) are the builder's, not
   yours: the builder runs on a different model than you, so never compare

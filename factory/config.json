@@ -1,5 +1,5 @@
 {
-  "concurrency": 3,
+  "concurrency": 1,
   "max_rounds": 3,
   "base_branch": "arch/factoryd-go",
   "merge_method": "merge",
@@ -19,7 +19,9 @@
   },
   "protected_paths": [
     "factory/checks.sh",
-    "factory/config.json"
+    "factory/config.json",
+    ".github/*",
+    "Makefile"
   ],
   "ports": { "base": 5100, "step": 10 },
   "prices_usd_per_mtok": {

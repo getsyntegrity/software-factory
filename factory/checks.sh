@@ -14,6 +14,7 @@
 #   npm run build
 set -euo pipefail
 
-# Jobs are built on arch/factoryd-go (the Go factoryd). Its Makefile's
-# `check` target is the gate: gofmt, go vet, go test, golangci-lint, go build.
+# Jobs are built on arch/factoryd-go (the Go aifactory). Its Makefile's
+# `check` target is the gate, the same one CI runs: gofmt, go vet, go test,
+# go build.
 make check
