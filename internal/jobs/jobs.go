@@ -15,12 +15,25 @@ const (
 	NextRunIntake = "run_intake"
 )
 
-// Job is one factory job as stored on disk.
+// Job is one factory job as stored on disk. Round, Intake, Gate and Reviews
+// are optional and omitted from the JSON while unset.
 type Job struct {
-	ID            string `json:"id"`
-	RequestID     string `json:"request_id"`
-	State         string `json:"state"`
-	NextOperation string `json:"next_operation"`
+	ID            string            `json:"id"`
+	RequestID     string            `json:"request_id"`
+	State         string            `json:"state"`
+	NextOperation string            `json:"next_operation"`
+	Round         int               `json:"round,omitempty"`
+	Intake        *Intake           `json:"intake,omitempty"`
+	Gate          string            `json:"gate,omitempty"`
+	Reviews       map[string]string `json:"reviews,omitempty"`
+}
+
+// Intake is the intake decision synced from the job's intake.md.
+type Intake struct {
+	Decision string   `json:"decision"`
+	Risk     string   `json:"risk"`
+	Surfaces []string `json:"surfaces"`
+	Rescoped bool     `json:"rescoped"`
 }
 
 var idPattern = regexp.MustCompile(`^job-[0-9a-f]{16}$`)

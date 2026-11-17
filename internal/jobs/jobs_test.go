@@ -59,6 +59,31 @@ func TestJobs(t *testing.T) {
 					ctx.Expect(value).To(specs.Not(specs.BeEmpty()))
 				}
 			})
+
+			s.It("reads a job written before round, intake, gate and reviews", func(ctx *specs.Context) {
+				var job Job
+				data := `{"id":"job-0123456789abcdef","request_id":"r","state":"intake","next_operation":"run_intake"}`
+				ctx.Expect(json.Unmarshal([]byte(data), &job)).To(specs.BeNil())
+				want := Job{ID: "job-0123456789abcdef", RequestID: "r", State: StateIntake, NextOperation: NextRunIntake}
+				ctx.Expect(job).ToEqual(want)
+				ctx.Expect(Validate(job)).To(specs.BeNil())
+			})
+
+			s.It("writes the synced fields when set", func(ctx *specs.Context) {
+				job, _ := New("req-1")
+				job.Round = 1
+				job.Intake = &Intake{Decision: "ACCEPT", Risk: "low", Surfaces: []string{}}
+				job.Gate = "PASS"
+				job.Reviews = map[string]string{"code": "PASS"}
+				data, err := json.Marshal(job)
+				ctx.Expect(err).To(specs.BeNil())
+				var fields map[string]any
+				ctx.Expect(json.Unmarshal(data, &fields)).To(specs.BeNil())
+				ctx.Expect(fields["round"]).ToEqual(float64(1))
+				ctx.Expect(fields["intake"]).ToEqual(map[string]any{"decision": "ACCEPT", "risk": "low", "surfaces": []any{}, "rescoped": false})
+				ctx.Expect(fields["gate"]).ToEqual("PASS")
+				ctx.Expect(fields["reviews"]).ToEqual(map[string]any{"code": "PASS"})
+			})
 		})
 
 		s.Describe("Validate", func(s *specs.Spec) {
