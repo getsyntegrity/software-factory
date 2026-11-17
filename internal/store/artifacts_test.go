@@ -252,3 +252,30 @@ func TestArtifactFoldersKeepJobOperations(t *testing.T) {
 		t.Errorf("ReadArtifact after Update = %q, %v", got, err)
 	}
 }
+
+func TestRelativeRootWritesTempBesideTarget(t *testing.T) {
+	t.Chdir(t.TempDir())
+	s := open(t, ".")
+	var temps []string
+	rename = func(from, to string) error {
+		temps = append(temps, from)
+		return os.Rename(from, to)
+	}
+	defer func() { rename = os.Rename }()
+	job := createJob(t, s, "req-rel")
+	if err := s.WriteArtifact(job.ID, Artifact{Kind: KindChecks, Round: 1}, []byte("x")); err != nil {
+		t.Fatalf("WriteArtifact: %v", err)
+	}
+	want := []string{".", filepath.Join(job.ID, "round-1")}
+	if len(temps) != len(want) {
+		t.Fatalf("renamed %v, want %d writes", temps, len(want))
+	}
+	for i, tmp := range temps {
+		if filepath.Dir(tmp) != want[i] {
+			t.Errorf("temp file %s, want it in %s", tmp, want[i])
+		}
+	}
+	if _, err := s.Get(job.ID); err != nil {
+		t.Errorf("Get: %v", err)
+	}
+}

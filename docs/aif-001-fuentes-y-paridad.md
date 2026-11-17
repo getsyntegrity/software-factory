@@ -245,7 +245,7 @@ lleva el PR que la integra.
 | PAR | Test real | Estado |
 |---|---|---|
 | PAR-EST-03 | `internal/store/store_test.go`: `TestUpdateSerializesAcrossProcesses`, `TestCreateAcrossProcesses`, `TestUpdateRejectedWritesNothing`, `TestUpdateInterruptedRenameKeepsPrevious`, `TestAbandonedTempFileIsHarmless`, `TestKilledLockHolderDoesNotBlock`, `TestDistinctJobsDoNotBlock` | Parcial: rebanada 1 de #381 (un escritor por job entre procesos). Pendientes: layout, sync y reconciliación. |
-| PAR-ART-01 | `internal/store/artifacts_test.go`: `TestArtifactWriteReadEveryKind`, `TestArtifactRewriteReplacesContent`, `TestArtifactInterruptedRenameKeepsPrevious`, `TestArtifactAbandonedTempFileIsHarmless`, `TestArtifactInvalidIdentifierWritesNothing`, `TestArtifactMissingJobWritesNothing`, `TestArtifactCorruptJobRejectsWrite`, `TestArtifactMissingIsNotMissingJob`, `TestArtifactFoldersKeepJobOperations` | Parcial: rebanada 1 de #417 (escribir y releer artefactos en el layout). Pendientes: job.json en <id>/, raíz factory/jobs, ids v2. |
+| PAR-ART-01 | `internal/store/artifacts_test.go`: `TestArtifactWriteReadEveryKind`, `TestArtifactRewriteReplacesContent`, `TestArtifactInterruptedRenameKeepsPrevious`, `TestArtifactAbandonedTempFileIsHarmless`, `TestArtifactInvalidIdentifierWritesNothing`, `TestArtifactMissingJobWritesNothing`, `TestArtifactCorruptJobRejectsWrite`, `TestArtifactMissingIsNotMissingJob`, `TestArtifactFoldersKeepJobOperations`, `TestRelativeRootWritesTempBesideTarget` | Parcial: rebanada 1 de #417 (escribir y releer artefactos en el layout). Pendientes: job.json en <id>/, raíz factory/jobs, ids v2. |
 
 ### Cola revisada
 

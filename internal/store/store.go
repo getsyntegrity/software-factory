@@ -20,8 +20,8 @@ var (
 	ErrCorrupt = errors.New("corrupt job file")
 )
 
-// rename moves a written temp file onto its job or artifact file. Tests replace it to
-// simulate a writer that crashes before the rename.
+// rename moves a written temp file onto its job or artifact file. Tests
+// replace it to simulate a writer that crashes before the rename.
 var rename = os.Rename
 
 // Store keeps each job at <root>/<id>.json and its artifacts in the folder
@@ -172,8 +172,8 @@ func (s *Store) write(job jobs.Job) error {
 // directory is written, synced, closed and renamed onto path. The temp file
 // is removed when any step fails, so path keeps its previous content.
 func writeAtomic(path string, data []byte) (err error) {
-	dir, name := filepath.Split(path)
-	tmp, err := os.CreateTemp(dir, "."+strings.TrimSuffix(name, ".json")+".tmp-*")
+	name := strings.TrimSuffix(filepath.Base(path), ".json")
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+name+".tmp-*")
 	if err != nil {
 		return fmt.Errorf("store: %w", err)
 	}
