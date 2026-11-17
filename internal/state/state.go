@@ -59,17 +59,21 @@ func NextOperation(s string) string {
 	return nextOperations[s]
 }
 
-// Position is where a job is: its state, its round and its round limit.
+// Position is where a job is: its state, its round, its round limit and the
+// candidate it is on. Candidate counts the spec and build runs under ODD.
 type Position struct {
 	State      string
 	Round      int
 	RoundLimit int
+	Candidate  int
 }
 
-// GateResult is the gate verdict and the commit it was run on.
+// GateResult is the gate verdict, the commit it was run on and, under ODD,
+// the candidate it was run for.
 type GateResult struct {
-	Verdict string
-	Commit  string
+	Verdict   string
+	Commit    string
+	Candidate int
 }
 
 // Facts are what the caller has already read about a job. Advance compares
@@ -85,13 +89,17 @@ type Facts struct {
 	ExpectedReviewers []string          // the reviewers the job waits for
 	Reviews           map[string]string // reviewer to PASS or CHANGES
 	Decision          string            // APPROVE or ESCALATE
+	SpecRevision      bool              // ODD: the spec needs revising
+	ReviewCandidates  map[string]int    // ODD: reviewer to the candidate reviewed
+	DecisionCandidate int               // ODD: the candidate the decision is for
 }
 
-// Result is an accepted move: the new state and round, why the job moved and
-// what runs next.
+// Result is an accepted move: the new state, round and candidate, why the job
+// moved and what runs next.
 type Result struct {
 	State         string
 	Round         int
+	Candidate     int
 	Cause         string
 	NextOperation string
 }
@@ -99,6 +107,7 @@ type Result struct {
 // Profile is a set of legal transitions and the guards that go with them.
 type Profile struct {
 	transitions map[string][]string
+	odd         bool // run oddGuard and count candidates
 }
 
 // V2 is the compatibility profile: the transitions and guards of factory v2.
@@ -114,6 +123,24 @@ var V2 = Profile{
 		Merging:    {NeedsHuman},
 		NeedsHuman: {Build, Rejected},
 	},
+}
+
+// ODD is the v2 profile plus returns to spec from build, gate and review, a
+// round consumed by every build, and approve and merging bound to evidence
+// from the current candidate.
+var ODD = Profile{
+	transitions: map[string][]string{
+		Intake:     {NeedsInfo, Rejected, Spec},
+		NeedsInfo:  {Intake, Rejected},
+		Spec:       {Build},
+		Build:      {Gate, NeedsHuman, Spec},
+		Gate:       {Review, Build, NeedsHuman, Spec},
+		Review:     {Approve, Build, NeedsHuman, Spec},
+		Approve:    {Merging, NeedsHuman},
+		Merging:    {NeedsHuman},
+		NeedsHuman: {Build, Rejected},
+	},
+	odd: true,
 }
 
 // Allows reports whether from → to is a legal pair in p. Any known
@@ -145,11 +172,79 @@ func (p Profile) Advance(pos Position, to string, facts Facts) (Result, error) {
 	if !p.Allows(from, to) {
 		return Result{}, fmt.Errorf("state: %s → %s is not a legal transition", from, to)
 	}
-	round, cause, err := guard(pos, to, facts)
+	check, candidate := guard, pos.Candidate
+	if p.odd {
+		check = oddGuard
+		if to == Spec || to == Build {
+			candidate++
+		}
+	}
+	round, cause, err := check(pos, to, facts)
 	if err != nil {
 		return Result{}, fmt.Errorf("state: %s → %s: %w", from, to, err)
 	}
-	return Result{State: to, Round: round, Cause: cause, NextOperation: NextOperation(to)}, nil
+	return Result{State: to, Round: round, Candidate: candidate, Cause: cause, NextOperation: NextOperation(to)}, nil
+}
+
+// oddGuard runs the ODD guard for pos.State → to: the round limit and the
+// returns to spec, then the v2 guard, then the candidate checks on evidence.
+func oddGuard(pos Position, to string, facts Facts) (int, string, error) {
+	from := pos.State
+	reworkable := from == Build || from == Gate || from == Review
+	exhausted := pos.Round >= pos.RoundLimit
+	at := fmt.Sprintf("round %d of %d", pos.Round, pos.RoundLimit)
+	switch {
+	case to == Spec && reworkable:
+		if !facts.SpecRevision {
+			return 0, "", fmt.Errorf("the spec-revision fact (SpecRevision) is not set")
+		}
+		if exhausted {
+			return 0, "", fmt.Errorf("%s: max_rounds exhausted; go to needs-human", at)
+		}
+		return pos.Round, "the spec is being revised in " + at, nil
+
+	case to == Build && (from == Spec || reworkable) && exhausted:
+		return 0, "", fmt.Errorf("%s: max_rounds exhausted; go to needs-human", at)
+
+	case to == NeedsHuman && reworkable && exhausted && facts.SpecRevision:
+		return pos.Round, fmt.Sprintf("spec revision needed in %s; max_rounds exhausted", at), nil
+	}
+
+	round, cause, err := guard(pos, to, facts)
+	if err != nil || !(from == Review && to == Approve || from == Approve && to == Merging) {
+		return round, cause, err
+	}
+	if err := currentEvidence(pos.Candidate, facts, to == Merging); err != nil {
+		return 0, "", err
+	}
+	return round, cause + " for candidate " + fmt.Sprint(pos.Candidate), nil
+}
+
+// currentEvidence checks that the gate, every expected review and, when
+// decision is set, the decision were produced for candidate.
+func currentEvidence(candidate int, facts Facts, decision bool) error {
+	stale := func(what string, c int) error {
+		return fmt.Errorf("%s is from candidate %d, not the current candidate %d", what, c, candidate)
+	}
+	if facts.Gate == nil {
+		return fmt.Errorf("the gate has not run")
+	}
+	if facts.Gate.Candidate != candidate {
+		return stale("the gate", facts.Gate.Candidate)
+	}
+	for _, r := range facts.ExpectedReviewers {
+		c, ok := facts.ReviewCandidates[r]
+		if !ok {
+			return fmt.Errorf("review %s has no candidate; the current candidate is %d", r, candidate)
+		}
+		if c != candidate {
+			return stale("review "+r, c)
+		}
+	}
+	if decision && facts.DecisionCandidate != candidate {
+		return stale("the decision", facts.DecisionCandidate)
+	}
+	return nil
 }
 
 // guard runs the v2 guard for pos.State → to and returns the new round and
