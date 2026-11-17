@@ -19,7 +19,7 @@ https://github.com/zazencodes/zazencodes-season-3/tree/main/src/software-factory
 Your agent reads [`INSTALL.md`](INSTALL.md), copies the skill, agents, scripts
 and dashboard, fills `factory/checks.sh` with your project's real test, lint,
 typecheck and build commands, tailors the reviewers to your stack, creates the
-GitHub labels, and checks that `checks.sh` passes on `main`.
+GitHub labels, and checks that `checks.sh` passes on the base branch (`base_branch`).
 
 You need Claude Code 2.1.257 or later, `python3`, and an authenticated
 [`gh`](https://cli.github.com/) that can push to the repo.
@@ -43,7 +43,7 @@ gate (script) ─FAIL──┤  factory/checks.sh; no reviewer runs on a failing
         ▼ PASS       │
 reviewers ─CHANGES───┘  code (haiku | sonnet), + ux & ui on UI changes, + security
         ▼ all PASS
-approver (opus) ── APPROVE  → sync with main, gate again, gh pr merge
+approver (opus) ── APPROVE  → sync with the base branch, gate again, gh pr merge
                 └─ ESCALATE → PR ready for you, issue labeled factory:needs-human
 ```
 
