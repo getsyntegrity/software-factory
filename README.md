@@ -12,6 +12,17 @@ The complete former implementation remains recoverable at:
 
 `backup/arch-factoryd-go-full-20261117-4b56aac3`
 
+## Usage
+
+```sh
+./bin/aifactory --help
+./bin/aifactory <command> --help
+```
+
+Commands: `mcp`, `serve`, `status` and `import-v2`. Every subcommand is a placeholder for now: it prints its help and does nothing else.
+
+Attribution of the v2 origin: [NOTICE.md](NOTICE.md).
+
 ## Check
 
 ```sh
