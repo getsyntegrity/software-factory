@@ -27,7 +27,8 @@ type command struct {
 var commands = []command{
 	{"mcp", "Serve the factory tools over MCP",
 		"Speaks MCP over stdin and stdout. Tools: create_job, get_job, list_jobs.\n" +
-			"Jobs are stored in .aifactory/jobs under the current directory.\n", runMCP},
+			"Jobs are stored in .aifactory/jobs under the current directory.\n",
+		func(stdin io.Reader, stdout, stderr io.Writer) int { return serveMCP(stdin, stdout, stderr) }},
 	{"serve", "Serve the factory dashboard over HTTP", notImplemented, nil},
 	{"status", "Show the state of the factory jobs", notImplemented, nil},
 	{"import-v2", "Import jobs from a Software Factory v2 checkout", notImplemented, nil},
@@ -83,6 +84,9 @@ func commandHelp(c command) string {
 		c.summary + ".\n\n" +
 		c.details
 }
+
+// serveMCP is what aifactory mcp runs; tests replace it.
+var serveMCP = runMCP
 
 // runMCP serves MCP on stdin and stdout with the store in .aifactory/jobs.
 func runMCP(stdin io.Reader, stdout, stderr io.Writer) int {
