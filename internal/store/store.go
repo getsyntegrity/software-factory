@@ -20,14 +20,15 @@ var (
 	ErrCorrupt = errors.New("corrupt job file")
 )
 
-// rename moves a written temp file onto its job file. Tests replace it to
-// simulate a writer that crashes before the rename.
+// rename moves a written temp file onto its job or artifact file. Tests
+// replace it to simulate a writer that crashes before the rename.
 var rename = os.Rename
 
-// Store keeps each job at <root>/<id>.json. Each job has a single writer
-// across processes: Create and Update hold an exclusive per-job lock on
-// <root>/.<id>.lock from before they read the job until after they write it.
-// Readers take no lock; atomic writes never show them a partial job.
+// Store keeps each job at <root>/<id>.json and its artifacts in the folder
+// <root>/<id>/. Each job has a single writer across processes: Create, Update
+// and WriteArtifact hold an exclusive per-job lock on <root>/.<id>.lock from
+// before they read the job until after they write. Readers take no lock;
+// atomic writes never show them a partial job or artifact.
 type Store struct {
 	root string
 }
@@ -158,14 +159,21 @@ func (s *Store) load(path string) (jobs.Job, error) {
 	return job, nil
 }
 
-// write stores job atomically: a temp file in root is written, synced,
-// closed and renamed onto <root>/<id>.json.
-func (s *Store) write(job jobs.Job) (err error) {
+// write stores job atomically onto <root>/<id>.json.
+func (s *Store) write(job jobs.Job) error {
 	data, err := json.Marshal(job)
 	if err != nil {
 		return fmt.Errorf("store: %w", err)
 	}
-	tmp, err := os.CreateTemp(s.root, "."+job.ID+".tmp-*")
+	return writeAtomic(s.path(job.ID), data)
+}
+
+// writeAtomic replaces path with data: a dot-prefixed temp file in path's
+// directory is written, synced, closed and renamed onto path. The temp file
+// is removed when any step fails, so path keeps its previous content.
+func writeAtomic(path string, data []byte) (err error) {
+	name := strings.TrimSuffix(filepath.Base(path), ".json")
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+name+".tmp-*")
 	if err != nil {
 		return fmt.Errorf("store: %w", err)
 	}
@@ -184,7 +192,7 @@ func (s *Store) write(job jobs.Job) (err error) {
 	if err = tmp.Close(); err != nil {
 		return fmt.Errorf("store: %w", err)
 	}
-	if err = rename(tmp.Name(), s.path(job.ID)); err != nil {
+	if err = rename(tmp.Name(), path); err != nil {
 		return fmt.Errorf("store: %w", err)
 	}
 	return nil
