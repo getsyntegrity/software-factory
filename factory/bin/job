@@ -19,11 +19,12 @@ Usage:
   job summary [<job>...]         table of jobs: issue, stage, PR, cost, time
   job pr-body <job>              the issue lines a job's PR body starts with:
                                  `Closes #<issue>`, plus `Refs #<parent>` for a
-                                 sub-issue, or `Closes #<parent>` on its last open one
+                                 sub-issue, or `Closes #<parent>` on its last open one;
+                                 only `Refs` lines when intake rescoped the job
 
 A sub-issue's issue.md also quotes its parent and lists its sibling
 sub-issues. Merging a sub-issue's PR closes the sub-issue, and the parent once
-every sibling is closed.
+every sibling is closed, unless intake rescoped the job.
 
 <job> is a job id (004-dark-mode) or an issue number (12).
 """
@@ -298,16 +299,23 @@ def sub_issues(repo, number):
 
 
 def parent_refs(job):
-    """The PR body lines that tie a sub-issue's PR to its parent: `Refs #<parent>`
-    while other sub-issues stay open, `Closes #<parent>` on the last one."""
-    lines = [f"Closes #{job['issue']}"]
+    """The PR body lines that tie a job's PR to its issues. A job intake rescoped
+    delivers only part of its issue, so it only refers to it and to the parent.
+    Otherwise `Closes #<issue>`, and for a sub-issue `Refs #<parent>` while other
+    sub-issues stay open, `Closes #<parent>` on the last one."""
+    partial = rescoped(job)
+    lines = [f"{'Refs' if partial else 'Closes'} #{job['issue']}"]
     repo = github_repo(job)
     parent = parent_issue(repo, job["issue"])
     if parent:
         others = [s for s in sub_issues(repo, parent["number"])
                   if s["number"] != job["issue"] and s["state"] == "open"]
-        lines.append(f"{'Refs' if others else 'Closes'} #{parent['number']}")
+        lines.append(f"{'Refs' if partial or others else 'Closes'} #{parent['number']}")
     return lines
+
+
+def rescoped(job):
+    return bool((job.get("intake") or {}).get("rescoped"))
 
 
 def parent_section(job, trusted):
@@ -337,7 +345,10 @@ def parent_section(job, trusted):
 
 def close_finished_parent(job):
     """After a sub-issue's PR merges: close the sub-issue and, once every sibling
-    is closed, the parent. PRs into a non-default base branch don't close issues."""
+    is closed, the parent. PRs into a non-default base branch don't close issues.
+    A rescoped job delivered only part of its issue, so nothing closes."""
+    if rescoped(job):
+        return
     repo = github_repo(job)
     parent = parent_issue(repo, job["issue"])
     if not parent:
