@@ -14,5 +14,6 @@
 #   npm run build
 set -euo pipefail
 
-echo "factory/checks.sh has no checks yet. Add this repo's test, lint, typecheck and build commands." >&2
-exit 1
+# Jobs are built on arch/factoryd-go (the Go factoryd). Its Makefile's
+# `check` target is the gate: gofmt, go vet, go test, golangci-lint, go build.
+make check

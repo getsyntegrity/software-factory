@@ -114,6 +114,11 @@ open http://localhost:8000/dashboard.html.
 Each job works in its own git worktree, a full checkout of the repo at
 `.worktrees/<job-id>` (gitignored). A tool run from the repo root that doesn't
 read `.gitignore` sees those copies too; exclude `.worktrees/` in its config.
+The worktree is created from a freshly fetched `origin/<base_branch>` (see
+`factory/config.json`). If `codegraph` is on PATH, the factory then runs
+`codegraph init -y` inside it, so every job gets its own fresh index;
+`.codegraph/` is added to `.git/info/exclude`. Indexing is best effort: if it
+fails or takes over 10 minutes, the job continues without an index.
 ```
 
 **`.gitignore`.** Append these two lines:
