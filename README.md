@@ -6,6 +6,8 @@ It contains no product behavior from the former `factoryd` implementation. The o
 
 The canonical functional baseline is the Software Factory v2 on `main`. The new implementation is tracked by [epic #375](https://github.com/getsyntegrity/software-factory/issues/375) and will be built incrementally with Gentle, MCP and ODD/XP.
 
+Frozen sources, contracts and the v2 parity matrix: [docs/aif-001-fuentes-y-paridad.md](docs/aif-001-fuentes-y-paridad.md).
+
 The complete former implementation remains recoverable at:
 
 `backup/arch-factoryd-go-full-20261117-4b56aac3`
