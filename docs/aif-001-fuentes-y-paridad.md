@@ -171,6 +171,110 @@ Una fila por comportamiento v2. Las piezas Go son nombres de paquete previstos
 | PAR-ENT-03 | entrega | APPROVE ejecuta `job merge`: sincroniza con la base, corre `gate --merge` (`merge-checks.md`), empuja, marca listo y hace `gh pr merge` con `merge_method`; cualquier fallo va a `needs-human` (`cmd_merge`, `factory/bin/gate`, `.claude/agents/approver.md`). | `internal/delivery` (merge) | Conflicto con la base o gate rojo tras sincronizar terminan en `needs-human`; éxito termina en `merged`. |
 | PAR-ENT-04 | entrega | ESCALATE o cualquier paso a `needs-human` marca el PR listo, comenta la decisión en el PR (o en el issue sin PR) y pone `factory:needs-human` (`advance`, `.claude/agents/approver.md`). | `internal/delivery` (escalado) | Doble de GitHub registra PR listo, comentario y etiqueta. |
 
+## Trazabilidad a historias (corrección de cobertura)
+
+La congelación original conserva sus 36 filas PAR-* y sus pruebas previstas.
+Esta sección asigna una responsable primaria a cada comportamiento; no acredita
+implementación ni ejecución. El texto anterior sobre piezas «previstas» describe
+el momento de #376, no el estado actual del código.
+
+| PAR | Responsable |
+|---|---|
+| PAR-INT-01 | #406 |
+| PAR-INT-02 | #406 |
+| PAR-INT-03 | #406 |
+| PAR-INT-04 | #407 |
+| PAR-INT-05 | #409 |
+| PAR-INT-06 | #406 |
+| PAR-EST-01 | #380 |
+| PAR-EST-02 | #383 |
+| PAR-EST-03 | #381 |
+| PAR-EST-04 | #409 |
+| PAR-ART-01 | #381 |
+| PAR-ART-02 | #381 |
+| PAR-ART-03 | #381 |
+| PAR-ART-04 | #410 |
+| PAR-ART-05 | #410 |
+| PAR-GATE-01 | #384 |
+| PAR-GATE-02 | #384 |
+| PAR-GATE-03 | #380 |
+| PAR-GATE-04 | #384 |
+| PAR-REV-01 | #390 |
+| PAR-REV-02 | #390 |
+| PAR-REV-03 | #408 |
+| PAR-REV-04 | #408 |
+| PAR-COR-01 | #380 |
+| PAR-COR-02 | #380 |
+| PAR-COR-03 | #386 |
+| PAR-COR-04 | #380 |
+| PAR-COR-05 | #386 |
+| PAR-REA-01 | #409 |
+| PAR-REA-02 | #406 |
+| PAR-REA-03 | #408 |
+| PAR-REA-04 | #409 |
+| PAR-ENT-01 | #383 |
+| PAR-ENT-02 | #383 |
+| PAR-ENT-03 | #391 |
+| PAR-ENT-04 | #391 |
+
+### Criterios para acreditar la migración
+
+- Cada issue responsable exige la prueba prevista en su fila. Al implementarla
+  registra ruta/nombre del test real, resultado, SHA del candidato y evidencia.
+- Una estructura vacía, un stub o import-v2 no acreditan ejecución del pipeline.
+- #411 integra el ciclo v2 compatible completo y publica el ledger de 36 filas.
+  #396 exige ese hito y el piloto real con Gentle/MCP y las extensiones.
+- ODD, MCP y PDF/scanners se informan como EXT-*; no cuentan como PASS de PAR-*.
+- PAR-ART-04 se verifica en #410 con fixtures compatibles de transcripciones
+  Claude y precios configurados. El runtime sin uso/precios informa desconocido;
+  no se afirma compatibilidad universal ni se inventan costos. #382 importa
+  datos sin exigir procesamiento de transcripciones.
+- #406 resuelve explícitamente IDs v2 NNN-slug y request_id del walking slice;
+  #381 resuelve layout compatible y persistencia sin pérdida de jobs existentes.
+- El baseline no cambia. #411 registra los deltas operativos posteriores de
+  #399/#400 (base y guardas) y #404 (review escrita en artefacto), distinguiendo
+  paridad de endurecimientos. Ningún delta se atribuye al baseline congelado.
+- No se reemplaza main por completar este documento ni por cerrar #411/#396;
+  esa entrega requiere decisión posterior del Owner.
+
+### Cola revisada
+
+La fuente operativa es #375; sus 27 historias tienen dependencias explícitas.
+Los códigos AIF originales se conservan. No ordenar por número de issue.
+
+1. #376
+2. #377
+3. #378
+4. #379
+5. #380
+6. #381
+7. #382
+8. #383
+9. #406
+10. #407
+11. #408
+12. #409
+13. #384
+14. #385
+15. #386
+16. #410
+17. #387
+18. #388
+19. #389
+20. #390
+21. #391
+22. #411
+23. #392
+24. #393
+25. #394
+26. #395
+27. #396
+
+Una sola historia en ejecución. Base y destino: arch/factoryd-go. Las nuevas
+historias #406–#411 quedan factory:draft hasta encolado del Owner. Cada PR
+mantiene el límite de 400 líneas autoradas; dividir antes de implementar si
+no cabe, sin cerrar la historia hasta completar todas sus rebanadas.
+
 ## Extensiones (no paridad)
 
 Lo que el port añade y v2 no tiene. Se mide aparte y nunca cuenta como paridad.
