@@ -89,8 +89,10 @@ command you ran and its result, or what the page showed.
 - Push with `git push -u origin <branch>`. Push only the job branch, never
   anything else.
 - If the branch has no PR yet (`gh pr view <branch>` fails), open it as a draft:
-  `gh pr create --repo <owner/name> --draft --base <base> --head <branch> --title "<spec title>" --body "Closes #<issue>"`
-  followed by a blank line and your Summary. Once it exists, just push; the PR
+  `gh pr create --repo <owner/name> --draft --base <base> --head <branch> --title "<spec title>" --body "<issue lines>"`
+  followed by a blank line and your Summary. `<issue lines>` is the output of
+  `<main checkout>/factory/bin/job pr-body <job-id>`, verbatim: `Closes #<issue>`,
+  plus `Refs #<parent>` or `Closes #<parent>` when the issue is a sub-issue. Once it exists, just push; the PR
   updates itself. Never mark the PR ready and never merge it.
 
 ## Write build.md
