@@ -224,7 +224,7 @@ el momento de #376, no el estado actual del código.
 - Una estructura vacía, un stub o import-v2 no acreditan ejecución del pipeline.
 - #411 integra el ciclo v2 compatible completo y publica el ledger de 36 filas.
   #396 exige ese hito y el piloto real con Gentle/MCP y las extensiones.
-- ODD, MCP y PDF/scanners se informan como EXT-*; no cuentan como PASS de PAR-*.
+- ODD, MCP, documentación humana y PDF/scanners se informan como EXT-*; no cuentan como PASS de PAR-*.
 - PAR-ART-04 se verifica en #410 con fixtures compatibles de transcripciones
   Claude y precios configurados. El runtime sin uso/precios informa desconocido;
   no se afirma compatibilidad universal ni se inventan costos. #382 importa
@@ -251,7 +251,7 @@ lleva el PR que la integra.
 
 ### Cola revisada
 
-La fuente operativa es #375; sus 27 historias tienen dependencias explícitas.
+La fuente operativa es #375; sus 29 historias tienen dependencias explícitas.
 Los códigos AIF originales se conservan. No ordenar por número de issue.
 
 1. #376
@@ -265,25 +265,27 @@ Los códigos AIF originales se conservan. No ordenar por número de issue.
 9. #406
 10. #407
 11. #408
-12. #409
-13. #384
-14. #385
-15. #386
-16. #410
-17. #387
-18. #388
-19. #389
-20. #390
-21. #391
-22. #411
-23. #392
-24. #393
-25. #394
-26. #395
-27. #396
+12. #438
+13. #409
+14. #384
+15. #385
+16. #386
+17. #410
+18. #387
+19. #439
+20. #388
+21. #389
+22. #390
+23. #391
+24. #411
+25. #392
+26. #393
+27. #394
+28. #395
+29. #396
 
-Una sola historia en ejecución. Base y destino: arch/factoryd-go. Las nuevas
-historias #406–#411 quedan factory:draft hasta encolado del Owner. Cada PR
+Una sola historia en ejecución. Base y destino: arch/factoryd-go. Las historias
+#406–#411, #438 y #439 quedan factory:draft hasta encolado del Owner. Cada PR
 mantiene el límite de 400 líneas autoradas; dividir antes de implementar si
 no cabe, sin cerrar la historia hasta completar todas sus rebanadas.
 
@@ -295,10 +297,14 @@ Lo que el port añade y v2 no tiene. Se mide aparte y nunca cuenta como paridad.
 |---|---|---|
 | EXT-ODD-01 | ODD | Gentle coordina la conversación y ODD (Organic Driven Development); `aifactory` valida estado, persistencia, evidencia y efectos. No se crea un segundo orquestador. |
 | EXT-ODD-02 | ODD | gentle-shell / gentle-pi entran en el alcance como extensión porque ODD es su flujo. Versión congelada: pendiente (sin valor; se fijará por tag o SHA publicado). |
+| EXT-ODD-03 | Comprensión ODD (#439) | El perfil v2 conserva `spec-writer/spec.md`. En ODD, Gentle facilita una única fuente `odd/tasks/<feature>.md`; `spec.md`, si existe por compatibilidad, es solo índice y no duplica requisitos. |
+| EXT-ODD-04 | Mermaid (#439) | La fuente ODD puede incluir Mermaid cuando estados, ramas, participantes, secuencia o relaciones se entienden mejor visualmente. El diagrama debe tener una razón, renderizar y mantenerse breve; no es obligatorio ni decorativo. |
 | EXT-MCP-01 | MCP | Servidor `aifactory`, transporte `stdio`, local; cliente Claude Code con Gentle-AI v4.5.0. |
 | EXT-MCP-02 | MCP | Contrato completo de nueve tools: `list_jobs`, `create_job`, `get_job`, `record_artifact`, `advance_job`, `run_checks`, `provide_feedback`, `deliver_job`, `stop_job`. |
 | EXT-MCP-03 | MCP | Walking slice de #379: `create_job`, `get_job` y `list_jobs`. |
 | EXT-MCP-04 | MCP | Schemas estrictos; un `request_id` repetido es idempotente. |
+| EXT-DOC-01 | Idioma humano (#438) | `documentation.language` usa una etiqueta BCP 47; v0.1 verifica `es`, `en` y `tr`. Toda prosa generada para personas usa un único idioma. Tokens de máquina, código, rutas, comandos, logs y citas se conservan. No hay fallback silencioso. |
+| EXT-DOC-02 | Contrato editorial (#438) | Los artefactos humanos son breves, legibles y orientados a decisión: conclusión, evidencia y próxima acción. Metadata estructurada y narrativa se separan; texto para agentes, razonamiento oculto y volcados internos quedan fuera. |
 | EXT-PDF-01 | PDF, página 9 | Tras CI y review, la entrega es una decisión humana. Cuando los agentes abren más PR de los que una persona puede leer, el tablero los ordena por riesgo en P1/P2/P3, los separa en Now/Next y muestra en cada tarjeta una razón breve y la próxima acción (por ejemplo corregir CI o fusionar). |
 | EXT-PDF-02 | PDF, página 10 | La vista empieza con un resumen del cambio y luego divide el PR en capas nombradas por propósito, en orden de lectura, para explicar el porqué que el diff solo no muestra. |
 | EXT-PDF-03 | PDF, página 10 | La revisión hace visibles los riesgos de seguridad y hallazgos aplicables. En v0.1 se usan únicamente Gitleaks, Semgrep y OSV-Scanner cuando estén configurados. Una herramienta ausente o fallida nunca se presenta como PASS. |
