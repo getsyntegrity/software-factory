@@ -29,56 +29,22 @@ skim a job on the dashboard and read the detail only where it matters.
 ## Pipeline
 
 ```
-intake (sonnet)    → ACCEPT (scope possibly changed) | NEEDS-INFO | REJECT, posted as an issue comment
-spec-writer        → MODE=initiative: vision.md, context.md, slices.md (1 to 7 slices)
-slice job          → the `next` slice: worktree factory/<job-id> from origin/main
-spec-writer (opus) → MODE=slice: spec.md, at most 250 words / 30 lines. READY | SPLIT | NEEDS-INFO
-specgate (script)  → rejects a malformed spec before any build (2 retries, then a human)
-intake + route     → rate this slice from its spec.md; reviewers + models via config.json
-builder            → commits; first round pushes + opens draft PR "Refs #<n>"
-gate (script)      → checks.sh; FAIL → builder gets the log tail in the same round (gate_retries, default 2)
+intake (fable)     → ACCEPT (scope possibly changed) | NEEDS-INFO | REJECT, posted as an issue comment
+route (script)     → reviewers + models from risk/surfaces via config.json
+worktree           → factory/<job-id> from origin/main
+spec-writer (opus) → spec.md
+builder            → commits; first round pushes + opens draft PR "Closes #<n>"
+gate (script)      → checks.sh; FAIL → builder gets the log, no reviewers spawned
 reviewers (routed) → parallel, WAIT FOR ALL; CHANGES → builder → gate → reviewers (max rounds)
 approver (opus)    → APPROVE: sync origin/main, gate, gh pr merge
                      ESCALATE: PR ready, decision as PR comment, label factory:needs-human
-spec-writer (opus) → MODE=replan after the merge: context.md, slices.md, replan.md
-                     CONTINUE (wait for a human OK, or go on) | DONE | NEEDS-HUMAN
 ```
 
-`stage` in `job.json` is one of `intake`, `needs-info`, `initiative`, `spec`,
-`rate`, `build`, `gate`, `review`, `approve`, `merging`, `replan`, `checkpoint`,
-`triage`, `needs-human`, `merged`, `done` (a finished spike), `rejected`. A job
-is one slice: it also carries `initiative_id`, `slice_id` and `kind`
-(`slice` | `spike`).
+`stage` in `job.json` is one of `intake`, `needs-info`, `spec`, `build`,
+`gate`, `review`, `approve`, `merging`, `needs-human`, `merged`, `rejected`.
 The legal moves are in `TRANSITIONS` at the top of `factory/bin/job`.
 
 ## Decisions
-
-**Iterate in slices, not in one big spec.** Nobody knows everything at the
-start, so a request becomes an *initiative*: `vision.md` (problem, desired
-result, how we know it's done), `context.md` (the living memory: Decidido,
-Supuestos, Abierto, Changelog) and `slices.md` (a table of vertical slices, each
-delivering visible value, exactly one `next`). Only the next slice gets a spec,
-at most 250 words with 1 to 4 short criteria (30 words each), a Valor and a Demo; the rest are
-one-line hypotheses. A slice that doesn't fit is split (`SPLIT`: the script adds
-the extra rows as `idea`). A *spike* is a throwaway build that produces
-`findings.md` instead of a merge; its worktree is discarded and it goes straight
-to replan. After every merge the spec-writer replans: it confirms or refutes
-assumptions, accepts or rejects the builder's `## Propuesta de cambio al spec`,
-and picks the next slice. `checkpoint: every-slice` (the default, `auto` per
-initiative) waits for a human OK between slices. Only the spec-writer and the
-scripts write `slices.md`, one at a time under a lock. An issue that is already
-atomic is an initiative of one slice, so a small issue still goes end to end.
-Jobs created before initiatives existed have no `initiative_id` and keep the
-old path (`intake → spec → build`).
-
-**Feedback is rework or direction, decided by a rule, not an agent.** A PR
-comment (from the operator or a OWNER/MEMBER/COLLABORATOR) is *rework* by
-default: the same job's builder fixes what was built, and if it sees the comment
-changes the scope it writes a spec-change proposal instead of implementing it.
-A comment starting with `[direction]`, or `job feedback --direction`, is
-*direction*: it goes to the replan as `direction-<k>.md`. Reviewers and approver
-don't ask to undo feedback, and the approver doesn't re-escalate what
-`context.md` records as decided by a human.
 
 **Issues are the queue; you trigger the run.** `/factory run` drains every open
 `factory` issue. Nothing runs in GitHub Actions or on a schedule: the factory
@@ -93,15 +59,14 @@ agents reply with one line and the scripts print one line; the detail lives in
 files the next agent reads. Claude Code allows 20 concurrent subagents per
 session by default, which covers three jobs with four reviewers each.
 
-**Intake at the door, once per issue.** It decides
+**Fable at the door, once.** Intake is the only Fable call per job. It decides
 whether the issue is worth building, rewrites the scope when the issue is too
 big or vague, and asks the author when only they can answer. Its decision goes
 on the issue as a comment; the issue body stays as written. Questions go to
 the author before a spec exists, so the spec writer never stalls on one.
 
-**Risk routes the work, a script does the routing.** Intake rates risk
-(`low`, `medium`, `high`) and surfaces (`ui`, `security`) for each slice from
-its own spec, since one slice may touch auth and another not. `factory/bin/route` looks
+**Risk routes the work, a script does the routing.** Intake rates risk (`low`,
+`medium`, `high`) and surfaces (`ui`, `security`). `factory/bin/route` looks
 them up in `config.json`:
 
 | | code review | ux | ui | security |
@@ -155,9 +120,7 @@ with model and token counts per message, to
 with the job's folder, so `factory/bin/job` sums the transcripts that name it
 and prices them with `prices_usd_per_mtok`. The figure is the API-equivalent
 cost of the job's agents; on a subscription it shows relative spend, not your
-bill. The orchestrator's own tokens aren't attributed to a job: `job summary`
-shows the orchestrator's total apart, from each `<session>.jsonl` next to the
-subagents it ran, counted once per session and left out of every job's cost. The
+bill. The orchestrator's own tokens aren't attributed to a job. The
 transcript format isn't a documented interface, so a Claude Code update could
 break this.
 
@@ -167,9 +130,7 @@ break this.
   label is the trust boundary.
 - Issue text reaches agents as quoted data in `issue.md`, with comments only
   from the issue's author and the factory's operator. It is never part of a
-  prompt. Intake, which reads it first, has a shell limited to read-only
-  `git show` and `git ls-tree` on the base branch, enforced by
-  `factory/bin/guard`.
+  prompt. Intake, which reads it first, has no shell.
 - Agents push only `factory/*` branches. Only `factory/bin/job merge` merges,
   through `gh pr merge`. The factory never deploys.
 - One PR per issue; at most `max_rounds` build rounds per job before a human

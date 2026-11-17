@@ -5,7 +5,7 @@ what's generic, adapt what's repo-specific, verify it, and report. Work in the
 project's root. Don't clone this repository.
 
 The source is the folder the user pointed you at. On GitHub, read files from
-`https://raw.githubusercontent.com/pablogore/software-factory/main/<path>`.
+`https://raw.githubusercontent.com/zazencodes/zazencodes-season-3/main/src/software-factory-claude-code-v2/<path>`.
 
 ## 0. Check the project
 
@@ -15,15 +15,11 @@ Stop and tell the user if any of these fail:
   who can push to it and manage its labels.
 - Its default branch (`gh repo view --json defaultBranchRef`) exists on
   `origin`.
-- `claude --version` is 2.1.257 or later (the factory's agents run on Opus, Sonnet and Haiku).
+- `claude --version` is 2.1.257 or later (the intake agent runs on Fable).
 - `python3 --version` is 3.10 or later. The scripts use only the standard
   library.
 - None of the files in step 1 already exist. If one does, show the user the
   clash and ask before overwriting.
-
-Node is optional and not a reason to stop. The dashboard's pipeline tests
-(`factory/tests/test_pipeline.py`) need `node` on the PATH; without it those
-tests are skipped, not failed.
 
 ## 1. Copy
 
@@ -45,13 +41,10 @@ factory/bin/job
 factory/bin/gate
 factory/bin/route
 factory/dashboard.html
-factory/pipeline.js
-factory/vendor/mermaid.min.js
-factory/vendor/mermaid.LICENSE
 ```
 
 ```bash
-SRC=https://raw.githubusercontent.com/pablogore/software-factory/main
+SRC=https://raw.githubusercontent.com/zazencodes/zazencodes-season-3/main/src/software-factory-claude-code-v2
 for f in <the paths above>; do
   mkdir -p "$(dirname "$f")" && curl -fsSL "$SRC/$f" -o "$f"
 done
@@ -75,8 +68,6 @@ It must be non-interactive, must not rewrite files (no `--fix`, no
 **`factory/config.json`.**
 
 - `base_branch`: the default branch.
-- `allowed_bases` (optional): the branches an issue can pick as its job's base
-  with a `base:<branch>` label. Without it, only `base_branch` is allowed.
 - `merge_method`: `merge`, `squash` or `rebase`, one the repo allows
   (`gh api repos/{owner}/{repo} --jq '{allow_merge_commit, allow_squash_merge, allow_rebase_merge}'`).
 - `protected_paths`: keep the two factory entries and don't add the project's
@@ -115,9 +106,8 @@ Then add a short section:
 ## Software factory
 
 `/factory run` builds every open GitHub issue labeled `factory` through
-intake → initiative (slices) → spec → build → gate → review → approve → replan,
-one PR per slice. State is in `factory/jobs/` and `factory/initiatives/`
-(gitignored); `factory/bin/job` is its only writer. Checks:
+intake → spec → build → gate → review → approve, one PR per issue. State is in
+`factory/jobs/` (gitignored); `factory/bin/job` is its only writer. Checks:
 `factory/checks.sh`. Dashboard: `cd factory && python3 -m http.server`, then
 open http://localhost:8000/dashboard.html.
 
@@ -126,15 +116,14 @@ Each job works in its own git worktree, a full checkout of the repo at
 read `.gitignore` sees those copies too; exclude `.worktrees/` in its config.
 ```
 
-**`.gitignore`.** Append these three lines:
+**`.gitignore`.** Append these two lines:
 
 ```gitignore
 /factory/jobs/
-/factory/initiatives/
 /.worktrees/
 ```
 
-`factory/jobs/` and `factory/initiatives/` are runtime state (job metadata, specs, reviews, check logs, visions and slices)
+`factory/jobs/` is runtime state (job metadata, specs, reviews, check logs)
 local to the machine running the factory. Each job's worktree is a full
 checkout in `.worktrees/<job-id>`. Neither belongs in the repo. Everything you
 copied in step 1 does: the skill in `.claude/skills/factory/`, the agents in
@@ -159,7 +148,7 @@ gh label create factory:needs-human --color D93F0B --description "The factory ne
    `description`, `tools`, `model`, and `hooks` on the builder. Claude Code
    ignores unknown keys without a warning, so a typo silently changes behaviour.
 4. `python3 -m json.tool factory/config.json` succeeds.
-5. `git check-ignore factory/jobs/x factory/initiatives/x .worktrees/x` prints all three paths, and
+5. `git check-ignore factory/jobs/x .worktrees/x` prints both paths, and
    `git status --porcelain --untracked-files=all` lists every file from step 1
    (the skill, the agents and `factory/`) as committable.
 
@@ -174,24 +163,10 @@ Then tell the user, in a few lines:
 
 - Label one or two small issues `factory`, then run `/factory run` in Claude
   Code from the project root.
-- To keep the orchestrator's context small, start that session clean:
-
-  ```bash
-  CLAUDE_CODE_DISABLE_AUTO_MEMORY=1 claude --model sonnet --strict-mcp-config --setting-sources project,local
-  ```
-
-  `--model sonnet` is a recommendation, not a measurement: nobody has yet
-  compared what the orchestrator costs on sonnet and on opus.
-  The rest leaves out MCP servers, the user's own settings (`~/.claude/settings.json`)
-  and automatic memory; the project's `.claude/` settings still load. The
-  subagents of a clean session have no MCP servers and no memory either;
-  without these flags they have both. Whether the subagents inherit the user's
-  settings is not confirmed: their transcripts don't show it.
 - Every job ends as a PR. The approver merges what it approves; the rest wait
   labeled `factory:needs-human`. Approve one by merging it on GitHub, or tell
   the factory what to change with `/factory <anything>`.
-- After each merged slice the factory replans and waits for their OK before the
-  next one (`checkpoint: every-slice`); `factory/bin/job set-checkpoint
-  <initiative> auto` removes the wait.
+- Intake runs on Fable, once per issue. Depending on their plan, Fable can
+  bill to usage credits rather than the plan's included usage.
 - To start carefully, set `concurrency` to 1 in `factory/config.json` and read
   every PR until they trust it.
