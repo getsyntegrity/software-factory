@@ -18,7 +18,5 @@ These test files still use plain `testing` with `t.Errorf` / `t.Fatal`, and some
 
 - `cmd/aifactory/main_test.go`
 - `internal/mcp/server_test.go`
-- `internal/state/odd_test.go`
-- `internal/state/state_test.go`
 - `internal/store/store_test.go`
 - `internal/store/artifacts_test.go`
