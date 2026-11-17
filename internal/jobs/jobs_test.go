@@ -10,8 +10,8 @@ import (
 )
 
 func TestJobs(t *testing.T) {
-	specs.Describe(t, "jobs", func(s *specs.Spec) {
-		s.Describe("New", func(s *specs.Spec) {
+	specs.Describe(t, "the job record", func(s *specs.Spec) {
+		s.Describe("creating a job from a request ID", func(s *specs.Spec) {
 			s.It("returns a job in state intake with the sha256-derived ID", func(ctx *specs.Context) {
 				job, err := New("req-1")
 				ctx.Expect(err).To(specs.BeNil())
@@ -45,7 +45,7 @@ func TestJobs(t *testing.T) {
 			})
 		})
 
-		s.Describe("JSON", func(s *specs.Spec) {
+		s.Describe("encoding a job as JSON", func(s *specs.Spec) {
 			s.It("has exactly four non-empty string fields", func(ctx *specs.Context) {
 				job, _ := New("req-1")
 				data, err := json.Marshal(job)
@@ -86,7 +86,7 @@ func TestJobs(t *testing.T) {
 			})
 		})
 
-		s.Describe("Validate", func(s *specs.Spec) {
+		s.Describe("validating a job", func(s *specs.Spec) {
 			valid, _ := New("req-1")
 
 			s.It("accepts a valid job", func(ctx *specs.Context) {
@@ -113,7 +113,7 @@ func TestJobs(t *testing.T) {
 			}
 		})
 
-		s.Describe("ValidID", func(s *specs.Spec) {
+		s.Describe("checking the format of a job ID", func(s *specs.Spec) {
 			s.It("rejects malformed IDs", func(ctx *specs.Context) {
 				for _, id := range []string{"", "../x", "job-", "job-0123456789abcdeg", "job-0123456789ABCDEF", "job-0123456789abcdef0"} {
 					ctx.Expect(ValidID(id)).To(specs.BeFalse())

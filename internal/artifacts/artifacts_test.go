@@ -45,8 +45,8 @@ COMMIT: 2934f5dc28593f1f995d5e319d2b2cbd5f678718
 )
 
 func TestArtifacts(t *testing.T) {
-	specs.Describe(t, "artifacts", func(s *specs.Spec) {
-		s.Describe("fixture 001", func(s *specs.Spec) {
+	specs.Describe(t, "parsing job artifacts", func(s *specs.Spec) {
+		s.Describe("reading the artifacts of the approved job 001", func(s *specs.Spec) {
 			s.It("parses intake.md", func(ctx *specs.Context) {
 				intake, err := ParseIntake(fixtureIntake)
 				ctx.Expect(err).To(specs.BeNil())
@@ -76,7 +76,7 @@ func TestArtifacts(t *testing.T) {
 			})
 		})
 
-		s.Describe("Header", func(s *specs.Spec) {
+		s.Describe("reading the header lines of an artifact", func(s *specs.Spec) {
 			s.It("normalizes keys and values", func(ctx *specs.Context) {
 				ctx.Expect(Header("  risk :  high \n")).ToEqual(map[string]string{"RISK": "high"})
 			})
@@ -94,7 +94,7 @@ func TestArtifacts(t *testing.T) {
 			})
 		})
 
-		s.Describe("ParseIntake", func(s *specs.Spec) {
+		s.Describe("reading the intake.md verdict and headers", func(s *specs.Spec) {
 			s.It("splits SURFACES on commas", func(ctx *specs.Context) {
 				intake, err := ParseIntake("DECISION: ACCEPT\nRISK: high\nSURFACES: ui, security\n")
 				ctx.Expect(err).To(specs.BeNil())
@@ -130,7 +130,7 @@ func TestArtifacts(t *testing.T) {
 			}
 		})
 
-		s.Describe("ParseBuild", func(s *specs.Spec) {
+		s.Describe("reading the build.md status", func(s *specs.Spec) {
 			s.It("returns BLOCKED", func(ctx *specs.Context) {
 				status, err := ParseBuild("  STATUS: BLOCKED  \n\n## Blocked\n")
 				ctx.Expect(err).To(specs.BeNil())
@@ -145,7 +145,7 @@ func TestArtifacts(t *testing.T) {
 			})
 		})
 
-		s.Describe("ParseChecks", func(s *specs.Spec) {
+		s.Describe("reading the checks.md gate and commit", func(s *specs.Spec) {
 			s.It("returns FAIL and an empty commit", func(ctx *specs.Context) {
 				checks, err := ParseChecks("GATE: FAIL\n")
 				ctx.Expect(err).To(specs.BeNil())
@@ -160,7 +160,7 @@ func TestArtifacts(t *testing.T) {
 			})
 		})
 
-		s.Describe("ParseReview", func(s *specs.Spec) {
+		s.Describe("reading a review verdict", func(s *specs.Spec) {
 			s.It("returns CHANGES with or without a space", func(ctx *specs.Context) {
 				ctx.Expect(ParseReview("VERDICT: CHANGES\n\n## Findings\n")).ToEqual("CHANGES")
 				ctx.Expect(ParseReview("VERDICT:PASS")).ToEqual("PASS")
@@ -174,7 +174,7 @@ func TestArtifacts(t *testing.T) {
 			})
 		})
 
-		s.Describe("ParseDecision", func(s *specs.Spec) {
+		s.Describe("reading the decision.md decision", func(s *specs.Spec) {
 			s.It("returns ESCALATE", func(ctx *specs.Context) {
 				decision, err := ParseDecision("ESCALATE\n\n## Why\n")
 				ctx.Expect(err).To(specs.BeNil())
