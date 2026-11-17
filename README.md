@@ -30,4 +30,4 @@ make check
 ./bin/aifactory
 ```
 
-Testing rules (unit tests with `go-specs` and spy mocks): [AGENTS.md](AGENTS.md).
+Testing rules (unit tests with `go-specs` and spy mocks): [skills/go-unit-testing/SKILL.md](skills/go-unit-testing/SKILL.md).
