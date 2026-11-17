@@ -169,10 +169,23 @@ def pr_target_problem(job, number, url, base_ref):
     problems = []
     if base_ref != BASE:
         problems.append(f"PR #{number} targets `{base_ref}`, not the factory's base branch `{BASE}`.")
-    want = f"https://github.com/{job['repo']}/pull/"
-    if not url.startswith(want):
+    m = re.match(r"^https://github\.com/([^/]+/[^/]+)/pull/", url)
+    if not (m and same_repo(job["repo"], m.group(1))):
         problems.append(f"PR #{number} ({url}) isn't in {job['repo']}, the origin repo.")
     return " ".join(problems) or None
+
+
+def same_repo(origin, pr_repo):
+    """Whether pr_repo, as GitHub names it, is origin. GitHub names are
+    case-insensitive, and origin may still use a name from before a rename or
+    transfer, which gh resolves to the current one."""
+    if origin.lower() == pr_repo.lower():
+        return True
+    try:
+        current = gh("repo", "view", origin, "--json", "nameWithOwner", "--jq", ".nameWithOwner").strip()
+    except Refused:
+        return False
+    return current.lower() == pr_repo.lower()
 
 
 def save(job):
