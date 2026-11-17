@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -21,7 +23,8 @@ var commandHelpText = map[string]string{
 
 Serve the factory tools over MCP.
 
-This command is not implemented yet.
+Speaks MCP over stdin and stdout. Tools: create_job, get_job, list_jobs.
+Jobs are stored in .aifactory/jobs under the current directory.
 `,
 	"serve": `Usage: aifactory serve [-h|--help]
 
@@ -45,7 +48,7 @@ This command is not implemented yet.
 
 func call(args ...string) (code int, stdout, stderr string) {
 	var out, errOut bytes.Buffer
-	code = run(args, &out, &errOut)
+	code = run(args, strings.NewReader(""), &out, &errOut)
 	return code, out.String(), errOut.String()
 }
 
@@ -67,6 +70,9 @@ func TestGeneralHelp(t *testing.T) {
 func TestCommandHelp(t *testing.T) {
 	for _, name := range []string{"mcp", "serve", "status", "import-v2"} {
 		for _, args := range [][]string{{name}, {name, "-h"}, {name, "--help"}} {
+			if len(args) == 1 && name == "mcp" {
+				continue // without arguments mcp serves; see TestMCPServes
+			}
 			code, stdout, stderr := call(args...)
 			if code != 0 {
 				t.Errorf("%q: exit code %d, want 0", args, code)
@@ -89,6 +95,7 @@ func TestUnknownInput(t *testing.T) {
 		{[]string{"bogus"}, "aifactory: unknown command \"bogus\"\n" + generalHelpText},
 		{[]string{"--bogus"}, "aifactory: unknown command \"--bogus\"\n" + generalHelpText},
 		{[]string{"status", "foo"}, "aifactory status: unexpected argument \"foo\"\n" + commandHelpText["status"]},
+		{[]string{"mcp", "foo"}, "aifactory mcp: unexpected argument \"foo\"\n" + commandHelpText["mcp"]},
 		{[]string{"mcp", "-h", "x"}, "aifactory mcp: unexpected argument \"-h\"\n" + commandHelpText["mcp"]},
 		{[]string{"import-v2", "--bogus"}, "aifactory import-v2: unexpected argument \"--bogus\"\n" + commandHelpText["import-v2"]},
 	}
@@ -113,5 +120,26 @@ func TestStableOutput(t *testing.T) {
 		if code1 != code2 || out1 != out2 || err1 != err2 {
 			t.Errorf("%q: two calls differ", args)
 		}
+	}
+}
+
+func TestMCPServes(t *testing.T) {
+	t.Chdir(t.TempDir())
+	in := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}
+{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"create_job","arguments":{"request_id":"fase0-001"}}}
+`
+	var out, errOut bytes.Buffer
+	if code := run([]string{"mcp"}, strings.NewReader(in), &out, &errOut); code != 0 {
+		t.Errorf("exit code %d, want 0", code)
+	}
+	if errOut.String() != "" {
+		t.Errorf("stderr %q, want empty", errOut.String())
+	}
+	if lines := strings.Count(out.String(), "\n"); lines != 2 {
+		t.Errorf("stdout has %d lines, want 2:\n%s", lines, out.String())
+	}
+	files, _ := filepath.Glob(filepath.Join(".aifactory", "jobs", "job-*.json"))
+	if len(files) != 1 {
+		t.Errorf("job files %v, want one", files)
 	}
 }
