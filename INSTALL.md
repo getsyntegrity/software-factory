@@ -41,6 +41,7 @@ factory/checks.sh
 factory/bin/job
 factory/bin/gate
 factory/bin/route
+factory/bin/factory_config.py
 factory/dashboard.html
 ```
 
