@@ -75,10 +75,11 @@ run, don't poll and don't wait: end your turn with a one-line status.
 
 Every prompt starts with the job's header, built from `job.json`, with
 `<base>` read from `base_branch` in `factory/config.json` (the one place it is
-set) and `<github repo>` from `repo` in `job.json`:
+set) and `<owner/name>` from `github_repo` in `job.json` (the GitHub repo, not
+the main checkout `<repo>`):
 
 ```
-Job: <id>. Job folder: <repo>/factory/jobs/<id>/. Main checkout: <repo>. Worktree: <worktree>. Branch: <branch>. Base: origin/<base>. Repo: <github repo>. Issue: #<issue>.
+Job: <id>. Job folder: <repo>/factory/jobs/<id>/. Main checkout: <repo>. Worktree: <worktree>. Branch: <branch>. Base: origin/<base>. GitHub repo: <owner/name>. Issue: #<issue>.
 ```
 
 `<header>` below means that line. Keep `Job folder: <path>/` exactly as shown:
@@ -101,7 +102,7 @@ short line per transition, e.g. `004-dark-mode #12: gate PASS → reviewing (cod
 branch, makes a detached worktree of it, records the commit in `job.json`, and
 prints the worktree's path. Spawn `intake` with `<header> Base tree: <path>.`
 When it returns, read its decision (`advance` removes the base tree, and
-refuses if intake didn't get one for the current base):
+refuses if intake didn't evaluate the configured base branch):
 
 - `ACCEPT`: run `factory/bin/route <id>`, then `factory/bin/job advance <id> spec`
   (it comments on the issue and creates the worktree). Go to **spec**.
