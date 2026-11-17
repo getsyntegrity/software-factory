@@ -1,7 +1,3 @@
 /bin/
-*.db
-*.db-wal
-*.db-shm
-.worktrees/
-factory/jobs/
-__pycache__/
+/dist/
+/.worktrees/

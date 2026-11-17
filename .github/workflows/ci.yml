@@ -1,9 +1,11 @@
 name: ci
+
 on:
   push:
     branches: [arch/factoryd-go]
   pull_request:
     branches: [arch/factoryd-go]
+
 jobs:
   check:
     runs-on: ubuntu-latest

@@ -1,7 +1,18 @@
-# software-factory · factoryd
+# aifactory · Go shell
 
-Rama de la nueva arquitectura: **factoryd**, la fábrica de software como servidor en Go, agnóstico del agente (Claude Code, Codex, Gemini, OpenCode, Pi…).
+This branch is intentionally reduced to a buildable Go shell for **aifactory v0.1**.
 
-La versión actual (skill de Claude Code + `factory/bin/job`) sigue en `main`.
+It contains no product behavior from the former `factoryd` implementation. The old ACP, SQLite, scheduler, outbox/event architecture, role system, pipelines, demos and historical backlog are not part of the new product.
 
-El diseño está en [docs/factoryd](docs/factoryd/README.md).
+The canonical functional baseline is the Software Factory v2 on `main`. The new implementation is tracked by [epic #375](https://github.com/getsyntegrity/software-factory/issues/375) and will be built incrementally with Gentle, MCP and ODD/XP.
+
+The complete former implementation remains recoverable at:
+
+`backup/arch-factoryd-go-full-20261117-4b56aac3`
+
+## Check
+
+```sh
+make check
+./bin/aifactory
+```
