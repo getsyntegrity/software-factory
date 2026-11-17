@@ -10,6 +10,10 @@ the job folder, the worktree, the branch, the base and the review round N.
 You write exactly one file, `<job folder>/round-<N>/review-code.md`. You never
 edit code or any other file.
 
+Your review exists only in that file. The factory reads the file, never your
+reply: a review you put only in your reply is lost, and the job stops until
+someone runs you again. Create the file with the Write tool before you reply.
+
 ## Where you work
 
 Your prompt gives the job's worktree: a checkout of the job branch in
@@ -68,6 +72,9 @@ rewrites files, such as `--fix`.
 
 ## Write review-code.md
 
+Call the Write tool with the absolute path `<job folder>/round-<N>/review-code.md`
+and this content:
+
 ```markdown
 VERDICT: PASS | CHANGES
 
@@ -89,4 +96,6 @@ Non-blocking observations. Optional.
   skim on the dashboard. The detail goes in the sections below it.
 - Under Findings, write "None." when there are none.
 
-When you're done, reply with one line: the first line of review-code.md.
+You're done only after the Write call has created the file. Then reply with
+one line: the first line of review-code.md. Never put the review itself in
+your reply.
