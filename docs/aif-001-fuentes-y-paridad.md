@@ -224,7 +224,7 @@ el momento de #376, no el estado actual del código.
 - Una estructura vacía, un stub o import-v2 no acreditan ejecución del pipeline.
 - #411 integra el ciclo v2 compatible completo y publica el ledger de 36 filas.
   #396 exige ese hito y el piloto real con Gentle/MCP y las extensiones.
-- ODD, MCP y PDF/scanners se informan como EXT-*; no cuentan como PASS de PAR-*.
+- ODD, MCP, documentación humana, biblioteca viva y PDF/scanners se informan como EXT-*; no cuentan como PASS de PAR-*.
 - PAR-ART-04 se verifica en #410 con fixtures compatibles de transcripciones
   Claude y precios configurados. El runtime sin uso/precios informa desconocido;
   no se afirma compatibilidad universal ni se inventan costos. #382 importa
@@ -251,8 +251,9 @@ lleva el PR que la integra.
 
 ### Cola revisada
 
-La fuente operativa es #375; sus 27 historias tienen dependencias explícitas.
-Los códigos AIF originales se conservan. No ordenar por número de issue.
+La fuente operativa es #375; sus 28 historias de v0.1 tienen dependencias
+explícitas. Los códigos AIF originales se conservan. No ordenar por número de
+issue.
 
 1. #376
 2. #377
@@ -265,27 +266,42 @@ Los códigos AIF originales se conservan. No ordenar por número de issue.
 9. #406
 10. #407
 11. #408
-12. #409
-13. #384
-14. #385
-15. #386
-16. #410
-17. #387
-18. #388
-19. #389
-20. #390
-21. #391
-22. #411
-23. #392
-24. #393
-25. #394
-26. #395
-27. #396
+12. #438
+13. #409
+14. #384
+15. #385
+16. #386
+17. #410
+18. #387
+19. #439
+20. #441
+21. #442
+22. #388
+23. #389
+24. #390
+25. #391
+26. #411
+27. #392
+28. #396
 
-Una sola historia en ejecución. Base y destino: arch/factoryd-go. Las nuevas
-historias #406–#411 quedan factory:draft hasta encolado del Owner. Cada PR
-mantiene el límite de 400 líneas autoradas; dividir antes de implementar si
-no cabe, sin cerrar la historia hasta completar todas sus rebanadas.
+Una sola historia en ejecución. Base y destino: arch/factoryd-go. Las historias
+#406–#411, #438, #439, #441 y #442 quedan factory:draft hasta encolado del
+Owner. Cada PR mantiene el límite de 400 líneas autoradas; dividir antes de
+implementar si no cabe, sin cerrar la historia hasta completar todas sus
+rebanadas.
+
+### Experiencia de la primera release
+
+- Gentle/MCP es la interfaz para operar y guiar el flujo.
+- #442 mantiene un modelo de conocimiento estructurado y genera una biblioteca
+  estática HTML/SVG, visual, multilenguaje y utilizable offline.
+- Markdown, JSON, logs y diffs son fuentes o evidencia; no son la experiencia
+  principal de lectura humana.
+- La biblioteca muestra la verdad vigente y una evolución curada por capacidad,
+  release y decisión, no una transcripción del trabajo de los agentes.
+- v0.1 no incorpora un front interactivo nuevo. El front v2 queda en main y
+  #393–#395 pasan al épico futuro #443, bloqueado por #396 y por una nueva
+  autorización del Owner.
 
 ## Extensiones (no paridad)
 
@@ -295,14 +311,22 @@ Lo que el port añade y v2 no tiene. Se mide aparte y nunca cuenta como paridad.
 |---|---|---|
 | EXT-ODD-01 | ODD | Gentle coordina la conversación y ODD (Organic Driven Development); `aifactory` valida estado, persistencia, evidencia y efectos. No se crea un segundo orquestador. |
 | EXT-ODD-02 | ODD | gentle-shell / gentle-pi entran en el alcance como extensión porque ODD es su flujo. Versión congelada: pendiente (sin valor; se fijará por tag o SHA publicado). |
+| EXT-ODD-03 | Contexto y comprensión ODD (#439) | El perfil v2 conserva `spec-writer/spec.md`. En ODD, Gentle facilita una única fuente `odd/tasks/<feature>.md` para que el Owner comprenda propósito, usuarios, capacidades, comportamiento actual, cambio e impacto sin seguir la implementación; `spec.md` es solo índice. |
+| EXT-ODD-04 | Mermaid (#439) | La fuente ODD puede incluir Mermaid cuando estados, ramas, participantes, secuencia o relaciones se entienden mejor visualmente. El diagrama debe tener una razón, renderizar y mantenerse breve; no es obligatorio ni decorativo. |
 | EXT-MCP-01 | MCP | Servidor `aifactory`, transporte `stdio`, local; cliente Claude Code con Gentle-AI v4.5.0. |
 | EXT-MCP-02 | MCP | Contrato completo de nueve tools: `list_jobs`, `create_job`, `get_job`, `record_artifact`, `advance_job`, `run_checks`, `provide_feedback`, `deliver_job`, `stop_job`. |
 | EXT-MCP-03 | MCP | Walking slice de #379: `create_job`, `get_job` y `list_jobs`. |
 | EXT-MCP-04 | MCP | Schemas estrictos; un `request_id` repetido es idempotente. |
-| EXT-PDF-01 | PDF, página 9 | Tras CI y review, la entrega es una decisión humana. Cuando los agentes abren más PR de los que una persona puede leer, el tablero los ordena por riesgo en P1/P2/P3, los separa en Now/Next y muestra en cada tarjeta una razón breve y la próxima acción (por ejemplo corregir CI o fusionar). |
-| EXT-PDF-02 | PDF, página 10 | La vista empieza con un resumen del cambio y luego divide el PR en capas nombradas por propósito, en orden de lectura, para explicar el porqué que el diff solo no muestra. |
+| EXT-DOC-01 | Idioma humano (#438) | `documentation.language` usa una etiqueta BCP 47; v0.1 verifica `es`, `en` y `tr`. Toda prosa generada para personas usa un único idioma. Tokens de máquina, código, rutas, comandos, logs y citas se conservan. No hay fallback silencioso. |
+| EXT-DOC-02 | Contrato editorial (#438) | Los artefactos humanos son breves, legibles y orientados a comprensión y decisión: contexto funcional, impacto, evidencia y próxima acción. Metadata estructurada y narrativa se separan; texto para agentes, razonamiento oculto, volcados internos y detalle de código como narrativa principal quedan fuera. |
+| EXT-HITL-01 | Checkpoints humanos (#441) | Un artefacto pendiente presenta contexto del software, revisión/hash, candidato, evidencia, preguntas, consecuencias y acciones válidas calculadas por Go. Una decisión vieja nunca se aplica a una revisión nueva. |
+| EXT-HITL-02 | Decisión explícita (#441) | `decide_job` ofrece `approve_and_advance`, `request_changes`, `revise_intent` y `reject`; registra actor, razón y request_id, es idempotente y se opera por MCP. El front futuro reutiliza el mismo servicio. Agentes y texto libre no autoaprueban. |
+| EXT-LIVEDOC-01 | Modelo de conocimiento (#442) | La fuente canónica de lectura humana es un modelo estructurado y versionado de producto, usuarios, capacidades, dominio, flujos, reglas, decisiones, evolución y evidencia. `get_software_context` lo consulta por MCP. Markdown y JSON no se presentan como interfaz humana. |
+| EXT-LIVEDOC-02 | Biblioteca viva (#442) | El mismo modelo genera HTML/SVG estático, reproducible y offline, con “Empezar aquí”, recorridos de lectura, páginas breves, diagramas con alternativa textual y evolución curada. No requiere servidor, SPA ni Node en runtime. |
+| EXT-PDF-01 | PDF, página 9 | Tras CI y review, la entrega es una decisión humana. Gentle/MCP y la biblioteca estática presentan el trabajo por riesgo en P1/P2/P3, Now/Next, con razón breve y próxima acción. El tablero interactivo equivalente queda para #443. |
+| EXT-PDF-02 | PDF, página 10 | La explicación y su página renderizada empiezan con un resumen del cambio y luego lo dividen en capas nombradas por propósito, en orden de lectura, para explicar el porqué que el diff solo no muestra. |
 | EXT-PDF-03 | PDF, página 10 | La revisión hace visibles los riesgos de seguridad y hallazgos aplicables. En v0.1 se usan únicamente Gitleaks, Semgrep y OSV-Scanner cuando estén configurados. Una herramienta ausente o fallida nunca se presenta como PASS. |
-| EXT-PDF-04 | PDF, referencia visual | Página 10 para detalle y recorrido; página 9 para el tablero Now/Next. No se inventan otros módulos de CodeRabbit. |
+| EXT-PDF-04 | PDF, referencia visual | Página 10 guía detalle y recorrido; página 9 guía Now/Next. v0.1 adapta esos patrones a Gentle/MCP y la biblioteca estática; #443 podrá volverlos interactivos. No se inventan otros módulos de CodeRabbit. |
 
 Fuente de las filas EXT-PDF: la guía *Build Your Own Software Factory in 5 Steps*
 (Daniel Moka, copia de 14 páginas del 17/11/2026), páginas 9 y 10. El PDF es
@@ -326,8 +350,10 @@ en una máquina.
   se informa la diferencia, sin asumir compatibilidad.
 - **Cliente:** Claude Code con Gentle-AI v4.5.0.
 - **Servidor:** `aifactory`, transporte `stdio`, local.
-- **Contrato completo:** `list_jobs`, `create_job`, `get_job`, `record_artifact`,
+- **Contrato base congelado:** `list_jobs`, `create_job`, `get_job`, `record_artifact`,
   `advance_job`, `run_checks`, `provide_feedback`, `deliver_job`, `stop_job`.
+- **Extensiones aprobadas:** #441 añade `decide_job` y #442 añade
+  `get_software_context`; se miden como EXT y no acreditan paridad v2.
 - **Walking slice de #379:** `create_job`, `get_job`, `list_jobs`. Las otras seis
   tools llegan en historias posteriores.
 - **Schemas:** estrictos. Un
