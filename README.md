@@ -29,3 +29,5 @@ Attribution of the v2 origin: [NOTICE.md](NOTICE.md).
 make check
 ./bin/aifactory
 ```
+
+Testing rules (unit tests with `go-specs` and spy mocks): [AGENTS.md](AGENTS.md).
