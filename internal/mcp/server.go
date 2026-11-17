@@ -85,10 +85,18 @@ func objectSchema(properties map[string]any) map[string]any {
 	}
 }
 
+// jobStore is what the server runs job operations on. A pointer to a
+// store.Store satisfies it.
+type jobStore interface {
+	Create(requestID string) (jobs.Job, error)
+	Get(id string) (jobs.Job, error)
+	List() ([]jobs.Job, error)
+}
+
 // Serve reads newline-delimited JSON-RPC 2.0 messages from in and writes one
 // response per line to out, using s for every job operation. It returns nil
 // when in reaches EOF.
-func Serve(in io.Reader, out io.Writer, s *store.Store, version string) error {
+func Serve(in io.Reader, out io.Writer, s jobStore, version string) error {
 	r := bufio.NewReader(in)
 	enc := json.NewEncoder(out)
 	for {
@@ -110,7 +118,7 @@ func Serve(in io.Reader, out io.Writer, s *store.Store, version string) error {
 }
 
 // handle returns the response to one message, and false for a notification.
-func handle(line []byte, s *store.Store, version string) (response, bool) {
+func handle(line []byte, s jobStore, version string) (response, bool) {
 	var req request
 	if err := json.Unmarshal(line, &req); err != nil {
 		return response{JSONRPC: "2.0", ID: json.RawMessage("null"), Error: &rpcError{codeParse, "parse error"}}, true
@@ -161,7 +169,7 @@ func handle(line []byte, s *store.Store, version string) (response, bool) {
 
 // callTool runs the named tool and returns its result, and false for an
 // unknown tool.
-func callTool(name string, raw json.RawMessage, s *store.Store) (map[string]any, bool) {
+func callTool(name string, raw json.RawMessage, s jobStore) (map[string]any, bool) {
 	var fields []string
 	switch name {
 	case "create_job":
